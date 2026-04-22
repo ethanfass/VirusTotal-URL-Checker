@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Office Threat Desk</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Security Link / File Triage</p>
+          <h1>Office Threat Desk</h1>
+        </div>
+        <div class="status-strip" aria-live="polite">
+          <span class="status-light"></span>
+          <span id="quotaText">Public VT guard ready</span>
+        </div>
+      </header>
+
+      <main class="desk-grid">
+        <section class="intake-panel" aria-labelledby="intakeTitle">
+          <div class="panel-heading">
+            <span class="binder-tab">IN</span>
+            <h2 id="intakeTitle">Case Intake</h2>
+          </div>
+
+          <form id="triageForm" class="triage-form">
+            <label for="indicatorInput">Indicator</label>
+            <textarea id="indicatorInput" name="indicator" rows="4" spellcheck="false" placeholder="https://example.com/login-check"></textarea>
+
+            <div class="button-row">
+              <button class="primary-btn" type="submit">
+                <span class="btn-mark">RUN</span>
+                Check case
+              </button>
+              <button class="secondary-btn" id="sampleBtn" type="button">Sample report</button>
+            </div>
+          </form>
+
+          <div class="ledger" aria-label="Desk ledger">
+            <div>
+              <span class="ledger-label">VT public pace</span>
+              <strong>4/min</strong>
+            </div>
+            <div>
+              <span class="ledger-label">Daily folder</span>
+              <strong>500</strong>
+            </div>
+            <div>
+              <span class="ledger-label">Mode</span>
+              <strong>v3 API</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="report-stage" aria-live="polite">
+          <div id="emptyState" class="empty-state">
+            <div class="paper-stack">
+              <div class="folder-label">READY</div>
+              <div class="stamp">PENDING REVIEW</div>
+              <p>Paste an indicator and start a case file.</p>
+            </div>
+          </div>
+
+          <article id="reportCard" class="report-card hidden" aria-label="Triage report">
+            <div class="report-actions">
+              <button id="printBtn" class="tool-btn" type="button" title="Print report">PRINT</button>
+              <a id="vtLink" class="tool-link" href="#" target="_blank" rel="noreferrer">VT FILE</a>
+            </div>
+
+            <div class="report-paper">
+              <div class="punch-holes" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <header class="report-header">
+                <div>
+                  <p class="form-code">FORM OTD-117</p>
+                  <h2 id="reportTitle">Triage Report</h2>
+                  <p id="reportSubtitle" class="report-subtitle"></p>
+                </div>
+                <div id="verdictStamp" class="verdict-stamp">LOW</div>
+              </header>
+
+              <section class="score-row" aria-label="Suspicion score">
+                <div class="score-dial">
+                  <div class="score-number" id="scoreNumber">0</div>
+                  <div class="score-label">Phishing suspicion</div>
+                  <div class="meter">
+                    <span id="meterFill"></span>
+                  </div>
+                </div>
+                <div class="case-summary">
+                  <p id="postureText"></p>
+                  <dl id="caseFacts" class="case-facts"></dl>
+                </div>
+              </section>
+
+              <section class="breakdown-section">
+                <div class="section-line">
+                  <h3>Why This Looks Suspicious</h3>
+                  <span id="checkedAt"></span>
+                </div>
+                <div id="signalList" class="signal-list"></div>
+              </section>
+
+              <section class="detections-section">
+                <div class="section-line">
+                  <h3>Scanner Register</h3>
+                  <span id="statsText"></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Engine</th>
+                        <th>Category</th>
+                        <th>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody id="detectionsBody"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="tags-section">
+                <h3>Desk Labels</h3>
+                <div id="labelList" class="label-list"></div>
+              </section>
+
+              <details class="json-drawer">
+                <summary>Raw JSON receipt</summary>
+                <pre id="rawJson"></pre>
+              </details>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <template id="signalTemplate">
+      <div class="signal-card">
+        <div>
+          <strong></strong>
+          <p></p>
+        </div>
+        <span></span>
+      </div>
+    </template>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

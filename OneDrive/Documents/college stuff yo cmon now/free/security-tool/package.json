@@ -1,0 +1,20 @@
+{
+  "name": "office-threat-desk",
+  "version": "1.0.0",
+  "description": "Old-school office themed VirusTotal triage dashboard for URLs, IPs, domains, and file hashes.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "virustotal",
+    "security",
+    "triage",
+    "dashboard"
+  ],
+  "license": "MIT"
+}

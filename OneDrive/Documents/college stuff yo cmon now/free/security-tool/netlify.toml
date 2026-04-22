@@ -1,0 +1,13 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/triage"
+  to = "/.netlify/functions/triage"
+  status = 200
+
+[[redirects]]
+  from = "/api/quota"
+  to = "/.netlify/functions/triage"
+  status = 200
