@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Filter, Gamepad2, Grid2X2, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, Filter, Gamepad2, Grid2X2, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { fallbackGames } from './data/fallbackGames.js';
 import { CatalogGameCard } from './components/CatalogGameCard.jsx';
 import { GameDetailPage } from './components/GameDetailPage.jsx';
@@ -22,6 +22,8 @@ import {
   labelList,
   localFilter,
   getGenreNames,
+  handleImageError,
+  imageFor,
   platforms,
   sortOptions,
   topKeys,
@@ -434,6 +436,22 @@ function App() {
   const clearSavedMatchGames = useCallback(() => {
     setSavedMatchGames([]);
   }, []);
+
+  const exportSavedMatches = useCallback(() => {
+    const date = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const lines = savedMatchGames.map((game, index) => {
+      const genres = labelList(getGenreNames(game), '—');
+      return `${String(index + 1).padStart(2, '0')}. ${game.name}\n    ${genres}  ·  ${game.rating.toFixed(1)} / 5`;
+    });
+    const content = `next_game — Saved Matches\nExported: ${date}\n${'─'.repeat(40)}\n\n${lines.join('\n\n')}`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'next_game_matches.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [savedMatchGames]);
 
   const addGame = useCallback((game) => {
     if (!isAllowedGame(game)) {
@@ -873,30 +891,27 @@ function App() {
         </div>
 
         <section className="match-saved-panel" aria-label="Saved matches list">
-          <div className="pane-titlebar">
+          <div className="pane-titlebar match-saved-titlebar">
             <span>MATCHED.LST</span>
-            <span>{savedMatchGames.length}/30</span>
+            <span className="match-saved-count">{savedMatchGames.length}/30</span>
           </div>
           <ScrollPanel className="matched-list" viewportClassName="matched-list-viewport" ariaLabel="Saved matched games">
             {savedMatchGames.length ? (
-              savedMatchGames.map((game) => (
+              savedMatchGames.map((game, index) => (
                 <div className="matched-game-row" key={game.id}>
+                  <span className="matched-game-rank" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                   <button type="button" className="matched-game-open" onClick={() => openPreview(game)} title="Open game preview">
-                    <span>{game.name}</span>
-                    <small>{labelList(getGenreNames(game), '—')} &middot; {game.rating.toFixed(1)}</small>
+                    <img className="matched-game-thumb" src={imageFor(game)} alt="" onError={(event) => handleImageError(event, game)} />
+                    <div className="matched-game-copy">
+                      <span>{game.name}</span>
+                      <small>{labelList(getGenreNames(game), '—')} &middot; {game.rating.toFixed(1)}</small>
+                    </div>
                   </button>
-                  <button
-                    type="button"
-                    className={selectedIds.has(game.id) ? 'icon-button add-button' : 'icon-button'}
-                    onClick={() => addGame(game)}
-                    title={selectedIds.has(game.id) ? 'Remove from picks' : 'Add to picks'}
-                    aria-label={selectedIds.has(game.id) ? `Remove ${game.name} from picks` : `Add ${game.name} to picks`}
-                  >
-                    <Plus size={16} />
-                  </button>
-                  <button type="button" className="icon-button reject-button" onClick={() => removeSavedMatchGame(game.id)} title="Remove from saved matches" aria-label={`Remove ${game.name} from saved matches`}>
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="matched-row-actions">
+                    <button type="button" className="icon-button reject-button" onClick={() => removeSavedMatchGame(game.id)} title="Remove from saved matches" aria-label={`Remove ${game.name} from saved matches`}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               ))
             ) : (
@@ -906,10 +921,16 @@ function App() {
             )}
           </ScrollPanel>
           {savedMatchGames.length > 0 && (
-            <button type="button" className="secondary-button matched-clear-button" onClick={clearSavedMatchGames}>
-              <Trash2 size={17} />
-              Clear saved matches
-            </button>
+            <div className="matched-actions">
+              <button type="button" className="secondary-button matched-export-button" onClick={exportSavedMatches}>
+                <Download size={17} />
+                Export list
+              </button>
+              <button type="button" className="secondary-button matched-clear-button" onClick={clearSavedMatchGames}>
+                <Trash2 size={17} />
+                Clear
+              </button>
+            </div>
           )}
         </section>
       </section>

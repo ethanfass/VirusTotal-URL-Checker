@@ -128,7 +128,7 @@ export function passesMatchMode(game, mode = 'safe') {
   }
 
   if (mode === 'hidden') {
-    return rating >= 3.1 && added <= 14000;
+    return rating >= 3.0 && added <= 6000;
   }
 
   return rating >= 2.6;
@@ -221,11 +221,16 @@ function isMeaningfulMatch(game, selectedGames, preferences = {}) {
   const breakdown = game.matchBreakdown || gameMatchBreakdown(game, selectedGames, preferences);
   const wildcardMode = preferences.matchMode === 'wildcard';
 
-  if (!breakdown.selectedNeedsPrimaryOverlap) {
-    return (breakdown.genreScore > 0 || breakdown.signalTagScore > 0 || breakdown.bestSourceAffinity >= (wildcardMode ? 16 : 24)) && breakdown.avoidancePenalty < 120;
+  // Wildcards accept any non-rejected game so cross-genre picks can compete.
+  if (wildcardMode) {
+    return breakdown.avoidancePenalty < 120;
   }
 
-  return (breakdown.hasStrongOverlap || breakdown.bestSourceAffinity >= (wildcardMode ? 22 : 32)) && breakdown.avoidancePenalty < 120;
+  if (!breakdown.selectedNeedsPrimaryOverlap) {
+    return (breakdown.genreScore > 0 || breakdown.signalTagScore > 0 || breakdown.bestSourceAffinity >= 24) && breakdown.avoidancePenalty < 120;
+  }
+
+  return (breakdown.hasStrongOverlap || breakdown.bestSourceAffinity >= 32) && breakdown.avoidancePenalty < 120;
 }
 
 export function gameMatchScore(game, selectedGames, preferences = {}) {
@@ -246,10 +251,10 @@ export function matchScoreForMode(game, breakdown, preferences = {}) {
   }
 
   if (mode === 'hidden') {
-    // Flatten popularity so quality obscure games beat mainstream ones.
+    // Preserve genre affinity but demote anything with mass-market reach.
     const popularityPenalty = Math.max(0, Math.log10(added + 1) * 40 - 18);
     const qualityBonus = Math.max(0, rating - 3.0) * 24;
-    return Math.round(breakdown.score - popularityPenalty + qualityBonus);
+    return Math.round(breakdown.score * 1.15 - popularityPenalty + qualityBonus);
   }
 
   // wildcard: dilute strong affinity so tangential games can compete;
@@ -390,6 +395,9 @@ export async function fetchMatches(selectedGames, filters, preferences = {}) {
   const genreIds = getGenreIdsFromGames(selectedGames);
   const platformIds = getPlatformIdsFromGames(selectedGames);
   const tagSlugs = getImportantTagSlugs(selectedGames);
+  const allKnownGenreIds = ['4', '3', '5', '2', '7', '51', '10', '14', '15', '1', '83'];
+  const genreIdSet = new Set(genreIds);
+  const crossGenreIds = allKnownGenreIds.filter((id) => !genreIdSet.has(id)).slice(0, 5).join(',');
   const averageSelectedRating = selectedGames.reduce((total, game) => total + game.rating, 0) / Math.max(selectedGames.length, 1);
   // Use a permissive floor so the same pool works for all three modes.
   const minRating = Math.max(2.5, Math.min(4.0, averageSelectedRating - 0.7));
@@ -422,6 +430,9 @@ export async function fetchMatches(selectedGames, filters, preferences = {}) {
         tagSlugs.length ? fetchRawgGames({ ...exploratoryFilters, rawTags: tagSlugs.join(','), platform: '' }, 36) : Promise.resolve([]),
         // Recent releases in the genre — good for hidden/wildcard variety
         tagSlugs.length ? fetchRawgGames({ ...exploratoryFilters, rawTags: tagSlugs.join(','), ordering: '-released', minRating: 2.8 }, 28) : Promise.resolve([]),
+        // Cross-genre pool for wildcard mode — genres outside the user's profile
+        crossGenreIds ? fetchRawgGames({ ...exploratoryFilters, rawGenres: crossGenreIds, ordering: '-rating' }, 32) : Promise.resolve([]),
+        crossGenreIds ? fetchRawgGames({ ...exploratoryFilters, rawGenres: crossGenreIds, ordering: '-added' }, 28) : Promise.resolve([]),
         ...selectedProfiles.flatMap((profile) => {
           const profileRequests = [];
 
