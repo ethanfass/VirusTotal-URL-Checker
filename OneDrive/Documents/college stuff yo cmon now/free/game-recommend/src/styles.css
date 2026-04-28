@@ -548,15 +548,6 @@ dd {
   text-shadow: none;
 }
 
-.desktop-icons a:hover .desktop-icon,
-.desktop-icons a:focus-visible .desktop-icon {
-  filter: none;
-  box-shadow:
-    inset 2px 2px 0 #172024,
-    inset -2px -2px 0 #f8fbff,
-    2px 2px 0 #17202499;
-}
-
 .desktop-icon {
   display: block;
   width: 42px;
