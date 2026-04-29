@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { getQuotaSnapshot, triageIndicator } from "../../lib/triage.js";
 
 export async function handler(event) {

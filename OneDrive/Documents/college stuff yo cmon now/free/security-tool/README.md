@@ -1,49 +1,58 @@
 # Office URL Analyzer
 
-An old-school office themed URL analyzer for checking links, website names, IP addresses, and file hashes against VirusTotal v3.
+Old office/noir styled URL analyzer built on the VirusTotal v3 API. It checks one item at a time and turns the raw scan/reputation data into a readable report.
 
-## Run it
+## Accepted inputs
 
-Create a local `.env` file:
+- Full link: `https://site.com/page`
+- Website/domain: `site.com`
+- IP address: `8.8.8.8`
+- Downloaded file hash: MD5, SHA-1, or SHA-256 text
+
+If a full page is not found, try the main website instead. Example: use `sporcle.com` instead of `sporcle.com/games/pokemon/151`.
+
+## Local setup
+
+Create `.env`:
 
 ```text
 VT_API_KEY=your_virustotal_api_key
 ```
 
-Then start the server:
+Install and run:
 
 ```powershell
+npm install
 npm start
 ```
 
-Then open http://localhost:5173.
+Open:
 
-## Deploy to Netlify
+```text
+http://localhost:5173
+```
 
-This project is Netlify-ready. Netlify serves `public/` as the site and routes `/api/triage` plus `/api/quota` to a serverless function.
+## Netlify
 
-In Netlify, add this environment variable:
+Add this environment variable in Netlify:
 
 ```text
 VT_API_KEY=your_virustotal_api_key
 ```
 
-Netlify settings:
+Build settings:
 
 ```text
+Build command: leave blank
 Publish directory: public
 Functions directory: netlify/functions
-Build command: leave blank
 ```
 
-## What it does
-
-- Detects whether the input is a URL, IP address, domain, or MD5/SHA1/SHA256 file hash.
-- Calls VirusTotal API v3 report endpoints from the local server or Netlify Functions.
-- Applies a local guard for the public API quota: 4 requests per minute and 500 requests per UTC day.
-- Builds a general risk score from VirusTotal detections, reputation, votes, and URL/domain red flags.
-- Renders a printable report page designed for portfolio screenshots.
+If this project folder is not the root of the GitHub repo, set Netlify's base directory to the folder that contains this README.
 
 ## Notes
 
-VirusTotal public API limits are strict, so this is shaped for personal and student use. The built-in quota guard is in memory, which is fine for local use and helpful for warm Netlify Functions, but not a durable production rate limiter. For production use, add persistent quota tracking, authentication, audit logging, and a backend secret manager.
+- `.env` is for local use only. Do not commit it.
+- The browser never gets the VirusTotal key; requests go through the Node server or Netlify function.
+- The score is a review aid, not a guarantee that a site is safe or unsafe.
+- VirusTotal public API limits are strict, so the app includes a small in-memory quota guard.
