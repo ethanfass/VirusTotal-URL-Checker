@@ -22,7 +22,7 @@ export function HelpWindow({ onClose }) {
 
         <div className="help-panel">
           <div className="pane-titlebar">
-            <span>NEXTGAME GUIDE</span>
+            <span>GO_NEXT GUIDE</span>
             <span>Quick Help</span>
           </div>
           <div className="help-content">
@@ -50,7 +50,7 @@ export function HelpWindow({ onClose }) {
                   <Sparkles size={16} />
                   3. Match
                 </h2>
-                <p>Click `Find matches` to run the NG algorithm. Open a result to see `WHY THIS MATCH` and score rank.</p>
+                <p>Click `Find matches` to run the GN algorithm. Open a result to see `WHY THIS MATCH` and score rank.</p>
               </section>
             </div>
 

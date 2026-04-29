@@ -64,7 +64,7 @@ const genreNameToId = categoryOptions.reduce((map, category) => {
 }, {});
 
 export const sortOptions = [
-  { label: 'NG algorithm', value: 'queuecraft' },
+  { label: 'GN algorithm', value: 'queuecraft' },
   { label: 'Most added', value: '-added' },
   { label: 'Best rated', value: '-rating' },
   { label: 'Newest', value: '-released' },

@@ -18,6 +18,10 @@ import {
 } from './gameData.js';
 import { RAWG_KEY, fetchRawgGames } from './rawg.js';
 
+const MATCH_MODE_VALUES = ['safe', 'hidden', 'wildcard'];
+const MATCH_POOL_PER_MODE = 30;
+const MATCH_POOL_TOTAL = MATCH_MODE_VALUES.length * MATCH_POOL_PER_MODE;
+
 function countSetOverlap(sourceSet, targetSet) {
   let overlap = 0;
   sourceSet.forEach((value) => {
@@ -118,20 +122,38 @@ function passesExcludedSignals(game, preferences = {}) {
   return !(preferences.excludedSignals || []).some((signal) => gameHasExcludedSignal(game, signal));
 }
 
-export function passesMatchMode(game, mode = 'safe') {
-  const added = game.added || game.ratings_count || 0;
+function popularitySignal(game) {
+  const added = game.added || 0;
   const ratingCount = game.ratings_count || 0;
+
+  return added + ratingCount * 6;
+}
+
+const HIDDEN_MAX_POPULARITY = 17000;
+const HIDDEN_MAX_RATING_COUNT = 2200;
+const WILDCARD_MAX_POPULARITY = 22000;
+const WILDCARD_MAX_RATING_COUNT = 4000;
+
+export function passesMatchMode(game, mode = 'safe', breakdown = game.matchBreakdown || null) {
   const rating = game.rating || 0;
+  const popularity = popularitySignal(game);
+  const ratingCount = game.ratings_count || 0;
+  const hasSharedGenre = Boolean(breakdown?.hasSharedGenre || breakdown?.genreScore > 0 || breakdown?.primaryGenreScore > 0);
+  const hasNewGenre = Boolean(breakdown?.hasNewGenre);
+  const hasStrongGenreMatch = Boolean(breakdown?.primaryGenreScore > 0 || breakdown?.genreScore >= 68 || breakdown?.bestSourceAffinity >= 32);
+  const isGenreMatch = rating >= 2.8 && hasSharedGenre;
+  const isWildcard = rating >= 2.7 && hasSharedGenre && hasNewGenre && popularity <= WILDCARD_MAX_POPULARITY && ratingCount <= WILDCARD_MAX_RATING_COUNT;
+  const isHidden = rating >= 3.05 && hasSharedGenre && hasStrongGenreMatch && !hasNewGenre && popularity <= HIDDEN_MAX_POPULARITY && ratingCount <= HIDDEN_MAX_RATING_COUNT;
 
   if (mode === 'safe') {
-    return rating >= 3.6 && (ratingCount >= 25 || added >= 300);
+    return isGenreMatch && !isHidden && !isWildcard;
   }
 
   if (mode === 'hidden') {
-    return rating >= 3.0 && added <= 6000;
+    return isHidden;
   }
 
-  return rating >= 2.6;
+  return isWildcard;
 }
 
 export function gameMatchBreakdown(game, selectedGames, preferences = {}) {
@@ -140,6 +162,7 @@ export function gameMatchBreakdown(game, selectedGames, preferences = {}) {
   const selectedGenres = countBy(selectedGames.flatMap(getGenreNames));
   const selectedPlatforms = countBy(selectedGames.flatMap(getPlatformNames));
   const selectedSignalTags = countBy(selectedGames.flatMap(getSignalTagNames));
+  const selectedSignalTagSet = new Set([...selectedSignalTags.keys()]);
   const selectedSupportiveTags = countBy(
     selectedGames.flatMap((selectedGame) =>
       getTagNames(selectedGame)
@@ -147,7 +170,16 @@ export function gameMatchBreakdown(game, selectedGames, preferences = {}) {
         .filter((tag) => ['co-op', 'online co-op', 'local co-op', 'cooperative'].includes(tag)),
     ),
   );
+  const selectedGenreSet = new Set(selectedGames.flatMap(getGenreNames).map(normalizeMatchLabel).filter(Boolean));
   const selectedPrimaryGenres = new Set(selectedProfiles.flatMap((profile) => [...profile.primaryGenres]));
+  const candidateGenres = [...candidateProfile.genres];
+  const candidatePrimaryGenres = [...candidateProfile.primaryGenres];
+  const candidateSignalTags = [...candidateProfile.signalTags];
+  const sharedGenreCount = candidateGenres.filter((genre) => selectedGenreSet.has(genre)).length;
+  const newGenreCount = candidateGenres.filter((genre) => !selectedGenreSet.has(genre)).length;
+  const sharedPrimaryGenreCount = candidatePrimaryGenres.filter((genre) => selectedPrimaryGenres.has(genre)).length;
+  const newPrimaryGenreCount = candidatePrimaryGenres.filter((genre) => !selectedPrimaryGenres.has(genre)).length;
+  const newSignalTagCount = candidateSignalTags.filter((tag) => !selectedSignalTagSet.has(tag)).length;
 
   const primaryGenreScore = [...candidateProfile.primaryGenres].reduce((score, genre) => score + (selectedPrimaryGenres.has(genre) ? 42 : 0), 0);
   const genreScore = getGenreNames(game).reduce((score, genre) => score + (selectedGenres.get(genre) || 0) * genreWeight(genre), 0);
@@ -210,8 +242,17 @@ export function gameMatchBreakdown(game, selectedGames, preferences = {}) {
     bestSourceMatchId: bestSourceAffinity.id,
     bestSourceMatchName: bestSourceAffinity.name,
     sourceCoverage,
+    primaryGenreScore,
     genreScore,
     signalTagScore,
+    hasSharedGenre: sharedGenreCount > 0 || sharedPrimaryGenreCount > 0,
+    hasNewGenre: newGenreCount > 0 || newPrimaryGenreCount > 0,
+    hasWildcardExpansion: newGenreCount > 0 || newPrimaryGenreCount > 0 || newSignalTagCount >= 2,
+    sharedGenreCount,
+    newGenreCount,
+    sharedPrimaryGenreCount,
+    newPrimaryGenreCount,
+    newSignalTagCount,
     avoidancePenalty,
     bestRejectedMatchName: rejectedSummary.best.name,
   };
@@ -239,29 +280,33 @@ export function gameMatchScore(game, selectedGames, preferences = {}) {
 
 export function matchScoreForMode(game, breakdown, preferences = {}) {
   const mode = preferences.matchMode || 'safe';
-  const added = game.added || game.ratings_count || 0;
-  const ratingCount = game.ratings_count || 0;
   const rating = game.rating || 0;
+  const overlap = breakdown.bestSourceAffinity || 0;
+  const coverage = breakdown.sourceCoverage || 0;
+  const popularity = popularitySignal(game);
 
   if (mode === 'safe') {
-    // Strongly reward established, well-reviewed games so they rise far above the noise.
-    const confidence = Math.min(Math.log10(ratingCount + added + 1) * 42, 168);
-    const ratingLift = Math.max(0, rating - 3.2) * 52;
-    return Math.round(breakdown.score + confidence + ratingLift);
+    const genreLift = breakdown.primaryGenreScore + breakdown.genreScore * 0.9;
+    const ratingLift = Math.max(0, rating - 2.8) * 34;
+    return Math.round(breakdown.score * 1.04 + genreLift + ratingLift + coverage * 14);
   }
 
   if (mode === 'hidden') {
-    // Preserve genre affinity but demote anything with mass-market reach.
-    const popularityPenalty = Math.max(0, Math.log10(added + 1) * 40 - 18);
-    const qualityBonus = Math.max(0, rating - 3.0) * 24;
-    return Math.round(breakdown.score * 1.15 - popularityPenalty + qualityBonus);
+    const rarityBonus = Math.max(0, 125 - Math.log10(popularity + 1) * 30);
+    const genreLift = breakdown.primaryGenreScore + breakdown.genreScore * 0.75;
+    const qualityBonus = Math.max(0, rating - 2.9) * 28;
+    const mainstreamPenalty = Math.max(0, popularity - 9000) / 90;
+    return Math.round(breakdown.score * 0.88 + genreLift + rarityBonus + qualityBonus - mainstreamPenalty);
   }
 
-  // wildcard: dilute strong affinity so tangential games can compete;
-  // wildcardOrder is a per-fetch random value (0-1) attached during fetchMatches.
-  const variety = (game.wildcardOrder || 0) * 140;
-  const freshness = Math.max(0, 80 - Math.min(Math.log10(ratingCount + 1) * 26, 80));
-  return Math.round(breakdown.score * 0.35 + freshness + variety);
+  const variety = (game.wildcardOrder || 0) * 95;
+  const rarityBonus = Math.max(0, 95 - Math.log10(popularity + 1) * 22);
+  const mixedGenreBonus = breakdown.hasNewGenre ? 70 + breakdown.newGenreCount * 18 : breakdown.hasWildcardExpansion ? 34 : 0;
+  const traitExpansionBonus = Math.min(breakdown.newSignalTagCount || 0, 4) * 8;
+  const sharedGenreAnchor = breakdown.hasSharedGenre ? 42 + breakdown.sharedGenreCount * 12 : 0;
+  const overfitPenalty = Math.max(0, overlap - 70) * 0.9;
+  const qualityFloor = Math.max(0, rating - 2.7) * 18;
+  return Math.round(breakdown.score * 0.42 + variety + rarityBonus + mixedGenreBonus + traitExpansionBonus + sharedGenreAnchor + qualityFloor - overfitPenalty);
 }
 
 export function getPreviewMatchReasons(game, selectedGames, preferences = {}) {
@@ -389,6 +434,20 @@ function diversifyMatches(matches, selectedGames, preferences = {}, limit = 30) 
   return chosen;
 }
 
+function buildModePool(scoredCandidates, selectedGames, preferences, mode, limit = MATCH_POOL_PER_MODE) {
+  const modePreferences = { ...preferences, matchMode: mode };
+  const modeMatches = scoredCandidates
+    .filter((game) => passesMatchMode(game, mode, game.matchBreakdown))
+    .map((game) => ({
+      ...game,
+      matchScore: matchScoreForMode(game, game.matchBreakdown, modePreferences),
+    }))
+    .filter((game) => isMeaningfulMatch(game, selectedGames, modePreferences))
+    .sort((a, b) => b.matchScore - a.matchScore);
+
+  return diversifyMatches(modeMatches, selectedGames, modePreferences, limit);
+}
+
 export async function fetchMatches(selectedGames, filters, preferences = {}) {
   const excludedIds = new Set([...selectedGames.map((game) => game.id), ...(preferences.rejectedGames || []).map((game) => game.id)]);
   const selectedProfiles = selectedGames.slice(0, 4).map(buildGameSignalProfile);
@@ -397,7 +456,12 @@ export async function fetchMatches(selectedGames, filters, preferences = {}) {
   const tagSlugs = getImportantTagSlugs(selectedGames);
   const allKnownGenreIds = ['4', '3', '5', '2', '7', '51', '10', '14', '15', '1', '83'];
   const genreIdSet = new Set(genreIds);
-  const crossGenreIds = allKnownGenreIds.filter((id) => !genreIdSet.has(id)).slice(0, 5).join(',');
+  const crossGenreIdList = allKnownGenreIds.filter((id) => !genreIdSet.has(id)).slice(0, 5);
+  const crossGenreIds = crossGenreIdList.join(',');
+  const mixedGenrePairs = genreIds
+    .slice(0, 3)
+    .flatMap((genreId) => crossGenreIdList.slice(0, 3).map((crossGenreId) => [genreId, crossGenreId]))
+    .slice(0, 6);
   const averageSelectedRating = selectedGames.reduce((total, game) => total + game.rating, 0) / Math.max(selectedGames.length, 1);
   // Use a permissive floor so the same pool works for all three modes.
   const minRating = Math.max(2.5, Math.min(4.0, averageSelectedRating - 0.7));
@@ -433,6 +497,9 @@ export async function fetchMatches(selectedGames, filters, preferences = {}) {
         // Cross-genre pool for wildcard mode — genres outside the user's profile
         crossGenreIds ? fetchRawgGames({ ...exploratoryFilters, rawGenres: crossGenreIds, ordering: '-rating' }, 32) : Promise.resolve([]),
         crossGenreIds ? fetchRawgGames({ ...exploratoryFilters, rawGenres: crossGenreIds, ordering: '-added' }, 28) : Promise.resolve([]),
+        ...mixedGenrePairs.map(([genreId, crossGenreId]) =>
+          fetchRawgGames({ ...exploratoryFilters, rawGenres: `${genreId},${crossGenreId}`, ordering: '-rating' }, 18),
+        ),
         ...selectedProfiles.flatMap((profile) => {
           const profileRequests = [];
 
@@ -481,9 +548,8 @@ export async function fetchMatches(selectedGames, filters, preferences = {}) {
     candidates = localFilter(fallbackGames, { ...baseFilters, minRating: 0 }, excludedIds);
   }
 
-  // Score with mode-neutral base affinity; attach per-fetch random wildcardOrder
-  // so wildcard mode produces different results each run. Mode filtering is
-  // deferred to the frontend so toggling modes re-sorts without re-fetching.
+  // Keep a broad candidate pool first, then take a balanced union from each
+  // match mode so one tab cannot starve the others before the UI filters.
   const scoredCandidates = candidates
     .map((game) => {
       const signalProfile = buildGameSignalProfile(game);
@@ -500,9 +566,20 @@ export async function fetchMatches(selectedGames, filters, preferences = {}) {
         matchScore,
       };
     })
-    .filter((game) => isMeaningfulMatch(game, selectedGames, preferences))
-    .filter((game) => (game.rating || 0) >= 2.4)
+    .filter((game) => (game.rating || 0) >= 2.4 && game.matchBreakdown.avoidancePenalty < 120)
     .sort((a, b) => b.matchScore - a.matchScore);
 
-  return diversifyMatches(scoredCandidates, selectedGames, preferences, 54);
+  const modePoolById = new Map();
+  MATCH_MODE_VALUES.flatMap((mode) => buildModePool(scoredCandidates, selectedGames, preferences, mode)).forEach((game) => {
+    const existingGame = modePoolById.get(game.id);
+    modePoolById.set(game.id, existingGame ? { ...existingGame, modePoolScore: Math.max(existingGame.modePoolScore || -Infinity, game.matchScore) } : game);
+  });
+
+  return [...modePoolById.values()]
+    .map((game) => ({
+      ...game,
+      matchScore: matchScoreForMode(game, game.matchBreakdown, preferences),
+    }))
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, MATCH_POOL_TOTAL);
 }

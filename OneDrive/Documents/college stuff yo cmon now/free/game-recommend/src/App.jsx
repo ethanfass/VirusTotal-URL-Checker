@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Download, Filter, Gamepad2, Grid2X2, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, Filter, Gamepad2, Grid2X2, House, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { fallbackGames } from './data/fallbackGames.js';
 import { CatalogGameCard } from './components/CatalogGameCard.jsx';
 import { GameDetailPage } from './components/GameDetailPage.jsx';
@@ -313,7 +313,7 @@ function App() {
       filters.search.trim() ? 'Query search' : 'Full library',
       categoryByValue.get(filters.category)?.label || 'All genres',
       platforms.find((platform) => platform.value === filters.platform)?.label || 'All platforms',
-      `${sortOptions.find((sortOption) => sortOption.value === filters.ordering)?.label || 'NG algorithm'} sort`,
+      `${sortOptions.find((sortOption) => sortOption.value === filters.ordering)?.label || 'GN algorithm'} sort`,
       `${filters.minRating.toFixed(1)}+ rating`,
     ],
     [filters],
@@ -332,7 +332,7 @@ function App() {
             matchScore: matchScoreForMode(game, matchBreakdown, rejectionContext),
           };
         })
-        .filter((game) => passesMatchMode(game, matchMode))
+        .filter((game) => passesMatchMode(game, matchMode, game.matchBreakdown))
         .filter((game) => gamePassesExcludedSignals(game, excludedSignals))
         .filter((game) => gameMatchesPlatforms(game, matchPlatformFilterEnabled, matchPlatformSelections))
         .sort((a, b) => b.matchScore - a.matchScore),
@@ -443,12 +443,12 @@ function App() {
       const genres = labelList(getGenreNames(game), '—');
       return `${String(index + 1).padStart(2, '0')}. ${game.name}\n    ${genres}  ·  ${game.rating.toFixed(1)} / 5`;
     });
-    const content = `next_game — Saved Matches\nExported: ${date}\n${'─'.repeat(40)}\n\n${lines.join('\n\n')}`;
+    const content = `go_next — Saved Matches\nExported: ${date}\n${'─'.repeat(40)}\n\n${lines.join('\n\n')}`;
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'next_game_matches.txt';
+    a.download = 'go_next_matches.txt';
     a.click();
     URL.revokeObjectURL(url);
   }, [savedMatchGames]);
@@ -537,19 +537,25 @@ function App() {
     <main className="desktop-shell" id="app-top">
       <WindowScrollBar />
       <nav className="desktop-icons" aria-label="Desktop shortcuts">
+        <a href="#app-top">
+          <i className="desktop-icon desktop-icon-home">
+            <House size={20} strokeWidth={2.6} />
+          </i>
+          Home
+        </a>
         <a href="#search-panel">
           <i className="desktop-icon desktop-icon-search">
             <Search size={22} strokeWidth={3} />
           </i>
           Search
         </a>
-        <a href="#selected-panel">
+        <a href="#matches">
           <i className="desktop-icon desktop-icon-list">
             <Gamepad2 size={18} strokeWidth={2.4} />
           </i>
-          Picks
+          Results
         </a>
-        <a href="#matches">
+        <a href="#matched-list">
           <i className="desktop-icon desktop-icon-star">
             <Sparkles size={18} strokeWidth={2.4} />
           </i>
@@ -560,7 +566,7 @@ function App() {
       <section className="app-window">
         <div className="window-titlebar">
           <span className="titlebar-icon" />
-          <span>NEXTGAME.EXE</span>
+          <span>GO_NEXT.EXE</span>
           <div className="window-controls" aria-hidden="true">
             <span />
             <span />
@@ -586,8 +592,8 @@ function App() {
         <section className="hero-panel" aria-labelledby="hero-title">
           <div className="hero-copy">
             <p className="hero-kicker">GAME ANALYZER READY</p>
-            <h1 id="hero-title">next_game</h1>
-            <p>Search the catalog, build a quick shortlist, and generate recommendations based on the games you already love.</p>
+            <h1 id="hero-title">go_next</h1>
+            <p className="hero-subheader">Pick games you love. Discover what to play next.</p>
             <div className="hero-infobar" aria-label="Main page overview">
               <span>Find games you like</span>
               <span>Build your queue</span>
@@ -600,11 +606,11 @@ function App() {
               <Search size={18} />
               Search
             </a>
-            <a className="hero-link hero-link-games" href="#games-panel">
+            <a className="hero-link hero-link-games" href="#matches">
               <Gamepad2 size={18} />
-              Games
+              Results
             </a>
-            <a className="hero-link hero-link-matches" href="#matches-panel">
+            <a className="hero-link hero-link-matches" href="#matched-list">
               <Sparkles size={18} />
               Matches
             </a>
@@ -630,11 +636,6 @@ function App() {
             <div className="search-actions">
               <button className="search-submit" type="submit">
                 Search
-              </button>
-
-              <button className="primary-button" type="button" onClick={handleSubmit} disabled={matching || selectedGames.length === 0}>
-                <Sparkles size={18} />
-                {matching ? 'Matching...' : 'Find matches'}
               </button>
             </div>
           </div>
@@ -795,6 +796,10 @@ function App() {
         </div>
 
         <div className="match-controls" aria-label="Match controls">
+          <button className="primary-button" type="button" onClick={handleSubmit} disabled={matching || selectedGames.length === 0}>
+            <Sparkles size={18} />
+            {matching ? 'Matching...' : 'Find matches'}
+          </button>
           <div className="match-mode-control" role="group" aria-label="Match confidence">
             {MATCH_MODES.map((mode) => (
               <button
@@ -838,7 +843,7 @@ function App() {
         </div>
 
         <div className="match-pager">
-          <button type="button" onClick={() => slideMatches(-MATCH_COLUMNS)} disabled={showAllMatches || matchOffset === 0 || filteredMatches.length <= MATCH_PAGE_SIZE}>
+          <button type="button" onClick={() => slideMatches(-(MATCH_COLUMNS * 2))} disabled={showAllMatches || matchOffset === 0 || filteredMatches.length <= MATCH_PAGE_SIZE}>
             <ChevronUp size={17} />
             Page Up
           </button>
@@ -861,13 +866,13 @@ function App() {
             <Grid2X2 size={17} />
             {showAllMatches ? 'Paged view' : 'Show all'}
           </button>
-          <button type="button" onClick={() => slideMatches(MATCH_COLUMNS)} disabled={showAllMatches || matchOffset >= maxMatchOffset || filteredMatches.length <= MATCH_PAGE_SIZE}>
+          <button type="button" onClick={() => slideMatches(MATCH_COLUMNS * 2)} disabled={showAllMatches || matchOffset >= maxMatchOffset || filteredMatches.length <= MATCH_PAGE_SIZE}>
             Page Down
             <ChevronDown size={17} />
           </button>
         </div>
 
-        <div className={`matches-grid ${showAllMatches ? 'matches-grid-all' : ''} match-slide-${matchDirection}`} key={`${showAllMatches ? 'all' : matchOffset}-${filteredMatches.length}`}>
+        <div id="match-results" className={`matches-grid ${showAllMatches ? 'matches-grid-all' : ''} match-slide-${matchDirection}`} key={`${showAllMatches ? 'all' : matchOffset}-${filteredMatches.length}`}>
           {visibleMatches.length ? (
             visibleMatches.map((game) => (
               <MatchCard
@@ -890,7 +895,7 @@ function App() {
           )}
         </div>
 
-        <section className="match-saved-panel" aria-label="Saved matches list">
+        <section id="matched-list" className={`match-saved-panel ${savedMatchGames.length ? '' : 'match-saved-panel-empty'}`.trim()} aria-label="Saved matches list">
           <div className="pane-titlebar match-saved-titlebar">
             <span>MATCHED.LST</span>
             <span className="match-saved-count">{savedMatchGames.length}/30</span>
@@ -965,3 +970,4 @@ function App() {
 }
 
 export default App;
+
