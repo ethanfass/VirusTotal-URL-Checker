@@ -1,4 +1,4 @@
-# Office URL Analyzer
+# VirusTotal URL Analyzer
 
 Old office/noir styled URL analyzer built on the VirusTotal v3 API. It checks one item at a time and turns the raw scan/reputation data into a readable report.
 

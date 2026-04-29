@@ -45,7 +45,7 @@ const server = createServer(async (req, res) => {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   server.listen(port, () => {
-    console.log(`Office URL Analyzer is running at http://localhost:${port}`);
+    console.log(`VirusTotal URL Analyzer is running at http://localhost:${port}`);
   });
 }
 
