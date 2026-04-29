@@ -23,7 +23,7 @@ export async function handler(event) {
     }
 
     const status = error.status || 500;
-    const message = status === 500 ? "The desk hit a server-side snag." : error.message;
+    const message = status === 500 ? "The analyzer hit a server-side snag." : error.message;
     return response(status, { error: message, details: error.details || null });
   }
 }

@@ -17,13 +17,13 @@ async function triageIndicator(body) {
   }
 
   if (!apiKey) {
-    throw httpError(503, "VirusTotal API key is not configured on the backend. Set VT_API_KEY in Netlify environment variables.");
+    throw httpError(503, "VirusTotal API key is not configured on the backend. Set VT_API_KEY in .env locally or in Netlify environment variables.");
   }
 
   const classification = classifyIndicator(indicator);
   enforceLocalQuota();
 
-  const vtResponse = await fetchVirusTotal(classification.path, apiKey);
+  const vtResponse = await fetchVirusTotal(classification.path, apiKey, classification);
   const normalized = normalizeVirusTotalReport(vtResponse, classification);
   const risk = scoreIndicator(normalized, classification);
 
@@ -120,7 +120,7 @@ function isLikelyDomain(value) {
   return labels.length >= 2 && labels.every((label) => /^[a-z0-9-]{1,63}$/i.test(label) && !label.startsWith("-") && !label.endsWith("-"));
 }
 
-async function fetchVirusTotal(apiPath, apiKey) {
+async function fetchVirusTotal(apiPath, apiKey, classification) {
   const response = await fetch(`${VT_BASE_URL}${apiPath}`, {
     headers: {
       accept: "application/json",
@@ -132,10 +132,30 @@ async function fetchVirusTotal(apiPath, apiKey) {
 
   if (!response.ok) {
     const message = payload?.error?.message || payload?.error?.code || `VirusTotal returned HTTP ${response.status}.`;
+    if (response.status === 404) {
+      throw httpError(response.status, notFoundMessage(classification), payload?.error || null);
+    }
     throw httpError(response.status, message, payload?.error || null);
   }
 
   return payload;
+}
+
+function notFoundMessage(classification) {
+  if (classification.type === "url") {
+    const hostname = new URL(classification.normalized).hostname;
+    return `VirusTotal has no report for that exact page yet. Try checking just the website name instead: ${hostname}`;
+  }
+
+  if (classification.type === "domain") {
+    return `VirusTotal does not have a report for the domain "${classification.normalized}" yet.`;
+  }
+
+  if (classification.type === "ip_address") {
+    return `VirusTotal does not have a report for the IP address "${classification.normalized}" yet.`;
+  }
+
+  return "VirusTotal does not have a report for that file hash yet.";
 }
 
 function normalizeVirusTotalReport(payload, classification) {
@@ -343,9 +363,9 @@ function scoreLexicalFeatures(classification) {
   const matchedWords = suspiciousWords.filter((word) => value.includes(word)).slice(0, 4);
   if (matchedWords.length > 0 && ["url", "domain"].includes(classification.type)) {
     signals.push({
-      label: "Phishing language",
+      label: "Credential-risk wording",
       impact: Math.min(14, matchedWords.length * 5),
-      detail: `Contains pressure words: ${matchedWords.join(", ")}.`
+      detail: `Contains account or login pressure words: ${matchedWords.join(", ")}.`
     });
   }
 
@@ -424,10 +444,10 @@ function titleCase(value) {
 }
 
 function verdictForScore(score) {
-  if (score >= 75) return "High suspicion";
-  if (score >= 50) return "Elevated suspicion";
+  if (score >= 75) return "High risk";
+  if (score >= 50) return "Elevated risk";
   if (score >= 25) return "Needs review";
-  return "Low visible suspicion";
+  return "Low visible risk";
 }
 
 function postureForScore(score) {

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -44,7 +45,7 @@ const server = createServer(async (req, res) => {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   server.listen(port, () => {
-    console.log(`Office Threat Desk is running at http://localhost:${port}`);
+    console.log(`Office URL Analyzer is running at http://localhost:${port}`);
   });
 }
 
@@ -92,7 +93,7 @@ async function readJsonBody(req) {
 
 function sendError(res, error) {
   const status = error.status || 500;
-  const message = status === 500 ? "The desk hit a server-side snag." : error.message;
+  const message = status === 500 ? "The analyzer hit a server-side snag." : error.message;
   return sendJson(res, { error: message, details: error.details || null }, status);
 }
 

@@ -1,7 +1,7 @@
 {
-  "name": "office-threat-desk",
+  "name": "office-url-analyzer",
   "version": "1.0.0",
-  "description": "Old-school office themed VirusTotal triage dashboard for URLs, IPs, domains, and file hashes.",
+  "description": "Old-school office themed VirusTotal URL analyzer for links, websites, IPs, and file hashes.",
   "type": "module",
   "scripts": {
     "start": "node server.js",
@@ -13,8 +13,11 @@
   "keywords": [
     "virustotal",
     "security",
-    "triage",
+    "url-analyzer",
     "dashboard"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
 }

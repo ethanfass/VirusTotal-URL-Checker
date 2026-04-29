@@ -3,37 +3,70 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Office Threat Desk</title>
+    <title>Office URL Analyzer</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <div class="page-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Security Link / File Triage</p>
-          <h1>Office Threat Desk</h1>
+          <p class="eyebrow">URL Analysis Desk</p>
+          <h1>Office URL Analyzer</h1>
+          <p class="topbar-copy">Analyze links and websites with VirusTotal scanner results, reputation data, and URL safety signals.</p>
+          <div class="scope-strip" aria-label="Supported lookup types">
+            <span>Full link</span>
+            <span>Website</span>
+            <span>IP address</span>
+            <span>File hash</span>
+          </div>
         </div>
-        <div class="status-strip" aria-live="polite">
-          <span class="status-light"></span>
-          <span id="quotaText">Public VT guard ready</span>
+        <div class="topbar-actions">
+          <button id="helpBtn" class="help-btn" type="button">
+            <span class="help-btn-mark">HELP</span>
+            <span>What can I check?</span>
+          </button>
+          <div class="status-strip" aria-live="polite">
+            <span class="status-light"></span>
+            <span id="quotaText">Public VT guard ready</span>
+          </div>
         </div>
       </header>
 
       <main class="desk-grid">
         <section class="intake-panel" aria-labelledby="intakeTitle">
           <div class="panel-heading">
-            <span class="binder-tab">IN</span>
-            <h2 id="intakeTitle">Case Intake</h2>
+            <span class="binder-tab">VT</span>
+            <h2 id="intakeTitle">Indicator Lookup</h2>
           </div>
 
           <form id="triageForm" class="triage-form">
-            <label for="indicatorInput">Indicator</label>
-            <textarea id="indicatorInput" name="indicator" rows="4" spellcheck="false" placeholder="https://example.com/login-check"></textarea>
+            <label for="indicatorInput">Paste a link, website, IP, or file hash</label>
+            <textarea id="indicatorInput" name="indicator" rows="4" spellcheck="false" wrap="soft" placeholder="https://example.com/login-check"></textarea>
+            <p class="field-note">Use a full page link, a website name, an IP address, or a file hash. If a full page is not found, try the website name by itself.</p>
+
+            <div class="input-guide" aria-label="Examples of supported indicators">
+              <div>
+                <span>Full link</span>
+                <code>https://site.com/page</code>
+              </div>
+              <div>
+                <span>Website</span>
+                <code>site.com</code>
+              </div>
+              <div>
+                <span>IP address</span>
+                <code>8.8.8.8</code>
+              </div>
+              <div>
+                <span>Downloaded file hash</span>
+                <code>44d886...</code>
+              </div>
+            </div>
 
             <div class="button-row">
               <button class="primary-btn" type="submit">
                 <span class="btn-mark">RUN</span>
-                Check case
+                Analyze indicator
               </button>
               <button class="secondary-btn" id="sampleBtn" type="button">Sample report</button>
             </div>
@@ -58,16 +91,26 @@
         <section class="report-stage" aria-live="polite">
           <div id="emptyState" class="empty-state">
             <div class="paper-stack">
-              <div class="folder-label">READY</div>
-              <div class="stamp">PENDING REVIEW</div>
-              <p>Paste an indicator and start a case file.</p>
+              <div class="folder-label">NO ACTIVE CASE</div>
+              <p class="empty-kicker">Full link / website / IP / hash</p>
+              <h2>Analyze one link or website.</h2>
+              <p>Submit an item to see scanner detections, reputation, risk signals, labels, and a link to the VirusTotal record.</p>
+              <div class="empty-checklist" aria-label="Report contents">
+                <span>Risk score</span>
+                <span>Detection summary</span>
+                <span>Evidence list</span>
+              </div>
             </div>
           </div>
 
-          <article id="reportCard" class="report-card hidden" aria-label="Triage report">
+          <article id="reportCard" class="report-card hidden" aria-label="Analysis report">
             <div class="report-actions">
               <button id="printBtn" class="tool-btn" type="button" title="Print report">PRINT</button>
               <a id="vtLink" class="tool-link" href="#" target="_blank" rel="noreferrer">VT FILE</a>
+              <span class="info-wrap">
+                <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain VirusTotal file link" data-info="Opens the full VirusTotal record for this link, website, IP address, or file hash in a new tab.">i</button>
+                <span class="info-popover" hidden></span>
+              </span>
             </div>
 
             <div class="report-paper">
@@ -79,30 +122,68 @@
 
               <header class="report-header">
                 <div>
-                  <p class="form-code">FORM OTD-117</p>
-                  <h2 id="reportTitle">Triage Report</h2>
+                  <p class="form-code">FORM URL-117</p>
+                  <div class="title-with-info">
+                    <h2 id="reportTitle">Analysis Report</h2>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain analysis report" data-info="This report summarizes what VirusTotal and the local URL checks found. It is a starting point for review, not a final safety guarantee.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
                   <p id="reportSubtitle" class="report-subtitle"></p>
                 </div>
-                <div id="verdictStamp" class="verdict-stamp">LOW</div>
+                <div class="verdict-wrap">
+                  <span class="info-wrap">
+                    <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain verdict" data-info="The verdict is a short label based on the risk score. Low visible risk means few warning signs; needs review means some signals deserve a closer look; elevated or high risk means treat carefully.">i</button>
+                    <span class="info-popover" hidden></span>
+                  </span>
+                  <div id="verdictStamp" class="verdict-stamp">LOW</div>
+                </div>
               </header>
 
-              <section class="score-row" aria-label="Suspicion score">
+              <section class="score-row" aria-label="Risk score">
                 <div class="score-dial">
                   <div class="score-number" id="scoreNumber">0</div>
-                  <div class="score-label">Phishing suspicion</div>
+                  <div class="score-label-row">
+                    <div class="score-label">URL risk score</div>
+                    <span class="info-wrap">
+                      <button class="info-btn info-btn-dark" type="button" aria-expanded="false" aria-label="Explain URL risk score" data-info="A 0 to 100 score calculated by this app from VirusTotal detections, reputation, community votes, and URL traits. Higher means more reason to review before trusting it.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
                   <div class="meter">
                     <span id="meterFill"></span>
                   </div>
                 </div>
                 <div class="case-summary">
+                  <div class="summary-heading">
+                    <span>Recommended action</span>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain recommended action" data-info="This sentence turns the score into plain guidance, such as whether the item looks low-risk, needs review, or should be handled carefully.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
                   <p id="postureText"></p>
+                  <div class="summary-heading">
+                    <span>Lookup details</span>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain lookup details" data-info="These are basic facts from the lookup, such as what type of item was checked, its VirusTotal identifier, reputation, response code, and last analysis time.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
                   <dl id="caseFacts" class="case-facts"></dl>
                 </div>
               </section>
 
               <section class="breakdown-section">
                 <div class="section-line">
-                  <h3>Why This Looks Suspicious</h3>
+                  <div class="title-with-info">
+                    <h3>Why This Was Scored</h3>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain evidence list" data-info="These rows explain what raised or lowered the risk score. Positive numbers add risk. Negative numbers reduce risk.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
                   <span id="checkedAt"></span>
                 </div>
                 <div id="signalList" class="signal-list"></div>
@@ -110,7 +191,13 @@
 
               <section class="detections-section">
                 <div class="section-line">
-                  <h3>Scanner Register</h3>
+                  <div class="title-with-info">
+                    <h3>Scanner Register</h3>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain scanner register" data-info="VirusTotal asks many security engines about the item. This table shows engines that marked it malicious or suspicious. Many harmless results usually lower concern.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
                   <span id="statsText"></span>
                 </div>
                 <div class="table-wrap">
@@ -128,12 +215,27 @@
               </section>
 
               <section class="tags-section">
-                <h3>Desk Labels</h3>
+                <div class="title-with-info">
+                  <h3>Desk Labels</h3>
+                  <span class="info-wrap">
+                    <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain desk labels" data-info="Labels are categories or tags returned by VirusTotal vendors. They describe what kind of site or file this appears to be, such as games, reference, phishing, or malware.">i</button>
+                    <span class="info-popover" hidden></span>
+                  </span>
+                </div>
                 <div id="labelList" class="label-list"></div>
               </section>
 
+              <div class="json-heading">
+                <div class="title-with-info">
+                  <h3>Raw JSON Receipt</h3>
+                  <span class="info-wrap">
+                    <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain raw JSON" data-info="Raw JSON is the original technical response from VirusTotal. It is useful for debugging or deeper research, but most users can ignore it.">i</button>
+                    <span class="info-popover" hidden></span>
+                  </span>
+                </div>
+              </div>
               <details class="json-drawer">
-                <summary>Raw JSON receipt</summary>
+                <summary>Show raw data</summary>
                 <pre id="rawJson"></pre>
               </details>
             </div>
@@ -151,6 +253,83 @@
         <span></span>
       </div>
     </template>
+
+    <dialog id="helpDialog" class="help-dialog" aria-labelledby="helpTitle">
+      <div class="dialog-titlebar">
+        <span id="helpTitle">URL Analyzer Help</span>
+        <button id="helpCloseBtn" type="button" aria-label="Close help">X</button>
+      </div>
+      <div class="help-body">
+        <section class="help-summary">
+          <p class="help-kicker">Quick field guide</p>
+          <h2>Paste one item. Get a readable URL safety report.</h2>
+          <p>Best use: check a link or website before opening, sharing, or trusting it. The report combines VirusTotal results with simple URL checks.</p>
+          <div class="help-chip-row" aria-label="Supported indicators">
+            <span>Full link</span>
+            <span>Website</span>
+            <span>IP address</span>
+            <span>Downloaded file hash</span>
+          </div>
+        </section>
+
+        <section class="help-card-grid" aria-label="Examples of accepted inputs">
+          <div class="help-example-card">
+            <span>Full link</span>
+            <code>https://site.com/login</code>
+            <p>Use when you want to check one exact page.</p>
+          </div>
+          <div class="help-example-card">
+            <span>Website</span>
+            <code>site.com</code>
+            <p>Use when a full page is not found or you only know the site name.</p>
+          </div>
+          <div class="help-example-card">
+            <span>IP address</span>
+            <code>8.8.8.8</code>
+            <p>Use for a server address found in logs or alerts.</p>
+          </div>
+          <div class="help-example-card">
+            <span>Downloaded file hash</span>
+            <code>44d88612fea8...</code>
+            <p>Use for an MD5, SHA-1, or SHA-256 hash from a file.</p>
+          </div>
+        </section>
+
+        <section class="help-lower-grid">
+          <div class="help-list-card help-do">
+            <h3>Submit</h3>
+            <ul>
+              <li>One link from an email, text, or webpage.</li>
+              <li>A website name like <code>example.com</code>.</li>
+              <li>A file hash calculated elsewhere.</li>
+            </ul>
+          </div>
+          <div class="help-list-card help-dont">
+            <h3>Do not submit</h3>
+            <ul>
+              <li>Passwords, API keys, or private messages.</li>
+              <li>An actual file. This app does not upload files.</li>
+              <li>Several links at once.</li>
+            </ul>
+          </div>
+          <div class="help-troubleshoot">
+            <h3>Common problems</h3>
+            <div class="trouble-row">
+              <span>Exact page not found</span>
+              <p>Try <code>sporcle.com</code> instead of <code>sporcle.com/games/pokemon/151</code>.</p>
+            </div>
+            <div class="trouble-row">
+              <span>Quota warning</span>
+              <p>Wait one minute. Public VirusTotal allows 4 lookups per minute.</p>
+            </div>
+            <div class="trouble-row">
+              <span>File hash confusion</span>
+              <p>Hash text, not the file itself.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </dialog>
 
     <script src="/app.js" type="module"></script>
   </body>

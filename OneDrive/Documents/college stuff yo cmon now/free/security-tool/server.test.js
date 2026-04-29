@@ -26,9 +26,9 @@ test("scores suspicious URL traits", () => {
     classification
   );
 
-  assert.equal(risk.verdict, "Elevated suspicion");
+  assert.equal(risk.verdict, "Elevated risk");
   assert.ok(risk.score >= 50);
-  assert.ok(risk.signals.some((signal) => signal.label === "Phishing language"));
+  assert.ok(risk.signals.some((signal) => signal.label === "Credential-risk wording"));
 });
 
 test("requires backend API key configuration", async () => {
@@ -40,9 +40,44 @@ test("requires backend API key configuration", async () => {
       () => triageIndicator({ indicator: "example.com" }),
       (error) =>
         error.status === 503 &&
-        error.message === "VirusTotal API key is not configured on the backend. Set VT_API_KEY in Netlify environment variables."
+        error.message === "VirusTotal API key is not configured on the backend. Set VT_API_KEY in .env locally or in Netlify environment variables."
     );
   } finally {
+    if (originalKey === undefined) {
+      delete process.env.VT_API_KEY;
+    } else {
+      process.env.VT_API_KEY = originalKey;
+    }
+  }
+});
+
+test("explains missing VirusTotal URL reports without exposing the encoded ID", async () => {
+  const originalKey = process.env.VT_API_KEY;
+  const originalFetch = globalThis.fetch;
+
+  try {
+    process.env.VT_API_KEY = "test-key";
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 404,
+      json: async () => ({
+        error: {
+          code: "NotFoundError",
+          message: 'URL "aHR0cHM6Ly9leGFtcGxlLmNvbS8" not found'
+        }
+      })
+    });
+
+    await assert.rejects(
+      () => triageIndicator({ indicator: "https://www.sporcle.com/games/NoahDaBomb1/every-nba-all-star-of-all-time" }),
+      (error) =>
+        error.status === 404 &&
+        error.message.includes("has no report for that exact page yet") &&
+        error.message.includes("www.sporcle.com") &&
+        !error.message.includes("aHR0")
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
     if (originalKey === undefined) {
       delete process.env.VT_API_KEY;
     } else {
