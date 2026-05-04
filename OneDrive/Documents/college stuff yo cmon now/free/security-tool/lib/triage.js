@@ -220,6 +220,13 @@ function normalizeVirusTotalReport(payload, classification, resolutionCount = nu
     ? rawCategories
     : null;
 
+  // DNS records (domain reports only)
+  const dnsRecords = (classification.type === "domain" && Array.isArray(attributes.last_dns_records) && attributes.last_dns_records.length > 0)
+    ? attributes.last_dns_records
+        .map(r => ({ type: r.type || "?", value: r.value || "", ttl: typeof r.ttl === "number" ? r.ttl : null, priority: r.priority ?? null }))
+        .slice(0, 40)
+    : null;
+
   return {
     id: data.id || classification.id,
     permalink: `https://www.virustotal.com/gui/${vtGuiSegment(classification.type)}/${encodeURIComponent(data.id || classification.id)}`,
@@ -247,7 +254,8 @@ function normalizeVirusTotalReport(payload, classification, resolutionCount = nu
     timesSubmitted,
     certificate,
     categories,
-    resolutionCount
+    resolutionCount,
+    dnsRecords
   };
 }
 

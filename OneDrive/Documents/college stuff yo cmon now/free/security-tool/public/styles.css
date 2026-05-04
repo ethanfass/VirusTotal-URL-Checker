@@ -1142,6 +1142,8 @@ td {
   border: 3px solid #000;
   box-shadow: var(--border-raised), 14px 14px 0 rgba(0, 0, 0, 0.76);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .help-dialog::backdrop {
@@ -1182,12 +1184,13 @@ td {
 .help-body {
   display: grid;
   gap: 10px;
-  max-height: calc(100vh - 78px);
+  flex: 1;
+  min-height: 0;
   padding: 12px;
   background:
     repeating-linear-gradient(90deg, rgba(239, 235, 232, 0.04) 0 1px, transparent 1px 12px),
     var(--window);
-  overflow: auto;
+  overflow-y: auto;
   scrollbar-color: var(--green) var(--window-dark);
 }
 
@@ -1697,6 +1700,273 @@ td {
     width: 42px;
     height: 38px;
   }
+}
+
+/* ── Report help button ──────────────────────────────────── */
+
+.report-help-btn {
+  margin-right: auto;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 2px, transparent 2px 7px),
+    var(--brass);
+  color: #000;
+}
+
+/* ── Report guide dialog ─────────────────────────────────── */
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.guide-card {
+  padding: 14px 16px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 3px solid #000;
+  border-left-width: 8px;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.55);
+}
+
+.guide-card--score,
+.guide-card--verdict {
+  border-left-color: var(--green);
+}
+
+.guide-card--signals,
+.guide-card--scanners {
+  border-left-color: var(--rose);
+}
+
+.guide-card--chain,
+.guide-card--cert,
+.guide-card--dns,
+.guide-card--meta {
+  border-left-color: var(--brass);
+}
+
+.guide-card--labels {
+  border-left-color: var(--cyan);
+}
+
+.guide-card--json {
+  border-left-color: var(--window-mid);
+}
+
+.guide-section-label {
+  display: block;
+  margin-bottom: 5px;
+  font: 700 0.7rem var(--mono);
+  text-transform: uppercase;
+  color: var(--green);
+}
+
+.guide-card h3 {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.guide-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.52;
+  color: var(--ink-soft);
+}
+
+.guide-tip {
+  margin-top: 10px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #000;
+  background: #d4cbbd;
+  border: 2px solid rgba(0, 0, 0, 0.28);
+}
+
+.guide-tip strong {
+  font-family: var(--mono);
+}
+
+@media (max-width: 680px) {
+  .guide-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Light mode ──────────────────────────────────────────── */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --desktop: #c0bab0;
+  --desktop-deep: #b0aaa0;
+  --window: #9e9890;
+}
+
+[data-theme="light"] body {
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.03) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.025) 0 1px, transparent 1px 5px),
+    radial-gradient(circle at 16% 0, rgba(80, 76, 70, 0.22), transparent 32%),
+    linear-gradient(135deg, var(--desktop) 0%, var(--desktop-deep) 54%, #9a9490 100%);
+}
+
+[data-theme="light"] body::before {
+  background:
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.025) 0 2px, transparent 2px 12px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.045) 0 2px, transparent 2px 12px);
+}
+
+[data-theme="light"] .topbar {
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.03) 0 1px, transparent 1px 12px),
+    var(--window);
+}
+
+/* ── Theme toggle button ─────────────────────────────────── */
+
+.theme-btn {
+  min-height: 34px;
+  padding: 5px 14px;
+  color: var(--paper);
+  font: 700 0.78rem var(--mono);
+  text-transform: uppercase;
+  background: var(--window-dark);
+  border: 3px solid #000;
+  box-shadow: var(--border-raised), 4px 4px 0 rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: transform 120ms steps(2, end), box-shadow 120ms steps(2, end);
+  align-self: end;
+}
+
+.theme-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: var(--border-sunken), 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* ── DNS records section ─────────────────────────────────── */
+
+.dns-section {
+  margin-top: 24px;
+}
+
+/* ── History panel ───────────────────────────────────────── */
+
+.history-panel {
+  margin-top: 18px;
+  border-top: 3px solid #000;
+  padding-top: 12px;
+}
+
+.history-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.history-heading > span {
+  font: 700 0.76rem var(--mono);
+  text-transform: uppercase;
+  color: var(--paper);
+}
+
+.history-clear-btn {
+  padding: 3px 8px;
+  color: var(--ink);
+  font: 700 0.68rem var(--mono);
+  text-transform: uppercase;
+  background: var(--paper);
+  border: 2px solid #000;
+  box-shadow: var(--border-raised);
+  cursor: pointer;
+}
+
+.history-clear-btn:hover {
+  background: var(--paper-deep);
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-color: var(--green) var(--window-dark);
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid #000;
+  box-shadow: var(--border-raised);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.history-item:hover {
+  background: var(--paper-deep);
+  box-shadow: var(--border-sunken);
+}
+
+.history-score {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font: 700 0.78rem var(--mono);
+  color: #fff;
+  background: var(--rose);
+  border: 2px solid #000;
+  flex-shrink: 0;
+}
+
+.history-score.low {
+  color: #000;
+  background: #c5d0c7;
+}
+
+.history-score.medium {
+  color: #000;
+  background: var(--brass);
+}
+
+.history-info {
+  min-width: 0;
+}
+
+.history-indicator {
+  display: block;
+  font: 700 0.72rem var(--mono);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-verdict {
+  display: block;
+  font: 500 0.68rem var(--mono);
+  color: var(--green);
+  text-transform: uppercase;
+}
+
+.history-time {
+  font: 500 0.66rem var(--mono);
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
 }
 
 @media print {

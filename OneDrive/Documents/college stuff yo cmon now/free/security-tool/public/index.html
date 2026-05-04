@@ -21,6 +21,7 @@
           </div>
         </div>
         <div class="topbar-actions">
+          <button id="themeBtn" class="theme-btn" type="button">Light mode</button>
           <button id="helpBtn" class="help-btn" type="button">
             <span class="help-btn-mark">HELP</span>
             <span>What can I check?</span>
@@ -86,6 +87,14 @@
               <strong>v3 API</strong>
             </div>
           </div>
+
+          <section class="history-panel hidden" id="historyPanel" aria-label="Recent lookups">
+            <div class="history-heading">
+              <span>Search log</span>
+              <button id="historyClearBtn" class="history-clear-btn" type="button">Clear</button>
+            </div>
+            <ol id="historyList" class="history-list"></ol>
+          </section>
         </section>
 
         <section class="report-stage" aria-live="polite">
@@ -105,6 +114,7 @@
 
           <article id="reportCard" class="report-card hidden" aria-label="Analysis report">
             <div class="report-actions">
+              <button id="reportHelpBtn" class="tool-btn report-help-btn" type="button">Report help</button>
               <button id="printBtn" class="tool-btn" type="button" title="Print report">PRINT</button>
               <a id="vtLink" class="tool-link" href="#" target="_blank" rel="noreferrer">VT FILE</a>
               <span class="info-wrap">
@@ -244,6 +254,31 @@
                 <dl id="certFacts" class="cert-facts"></dl>
               </section>
 
+              <section class="dns-section hidden" id="dnsSection">
+                <div class="section-line">
+                  <div class="title-with-info">
+                    <h3>DNS Records</h3>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain DNS records" data-info="Recent DNS records VirusTotal has observed for this domain. A and AAAA records show where the domain resolves. MX shows mail servers. NS shows authoritative nameservers.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
+                  <span id="dnsCount"></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Value</th>
+                        <th>TTL</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dnsBody"></tbody>
+                  </table>
+                </div>
+              </section>
+
               <section class="tags-section">
                 <div class="title-with-info">
                   <h3>Desk Labels</h3>
@@ -372,6 +407,94 @@
             </div>
           </div>
         </section>
+      </div>
+    </dialog>
+
+    <dialog id="reportHelpDialog" class="help-dialog" aria-labelledby="reportHelpTitle">
+      <div class="dialog-titlebar">
+        <span id="reportHelpTitle">Report Help</span>
+        <button id="reportHelpCloseBtn" type="button" aria-label="Close report help">X</button>
+      </div>
+      <div class="help-body">
+        <section class="help-summary">
+          <p class="help-kicker">Plain-English guide</p>
+          <h2>What does each part of the report mean?</h2>
+          <p>You do not need a security background to read this. Every section is explained below in plain language.</p>
+        </section>
+
+        <div class="guide-grid">
+
+          <div class="guide-card guide-card--score">
+            <span class="guide-section-label">Risk score</span>
+            <h3>The number from 0 to 100</h3>
+            <p>A suspicion meter. Zero means nothing raised a flag. One hundred means serious red flags across the board. It is calculated from scanner results, community reputation, and suspicious patterns found in the link or domain itself — not just one thing.</p>
+            <div class="guide-tip"><strong>Under 25</strong> — generally looks fine. <strong>25–50</strong> — worth a closer look. <strong>50–75</strong> — treat with caution. <strong>Above 75</strong> — assume it is dangerous until you know otherwise.</div>
+          </div>
+
+          <div class="guide-card guide-card--verdict">
+            <span class="guide-section-label">Verdict &amp; recommended action</span>
+            <h3>The bold stamp and the guidance sentence below the score</h3>
+            <p>The verdict is a plain-language label for the score: "Low visible risk," "Needs review," "Elevated risk," or "High risk." The recommended action turns that into one practical sentence — for example whether to open the link, review it carefully, or treat it as dangerous.</p>
+            <div class="guide-tip">A "Low visible risk" result means nothing obvious was found — not that the item is guaranteed safe. If you did not expect to receive the link, be cautious regardless of the score.</div>
+          </div>
+
+          <div class="guide-card guide-card--signals">
+            <span class="guide-section-label">Why this was scored</span>
+            <h3>The list of things that raised or lowered the score</h3>
+            <p>Each row explains one reason the score changed. Red score badges are warning signs — the bigger the number, the stronger the signal. Green score badges mean something actually looked safe and brought the score down. The rows are sorted from most to least influential.</p>
+            <div class="guide-tip">Focus on the top two or three rows. A single warning sign does not always mean danger, but several high-scoring rows together tell a clear story worth taking seriously.</div>
+          </div>
+
+          <div class="guide-card guide-card--meta">
+            <span class="guide-section-label">Lookup details</span>
+            <h3>Basic facts about what was checked</h3>
+            <p>Shows factual information about the item — when VirusTotal last scanned it, how many times people have submitted it, and type-specific details like the domain registrar, IP address owner, or file size. It is context, not a verdict on its own.</p>
+            <div class="guide-tip">A very low submission count means few people have checked this item before. That can mean it is obscure and harmless, or it can mean it is a fresh threat that has not been widely reported yet.</div>
+          </div>
+
+          <div class="guide-card guide-card--scanners">
+            <span class="guide-section-label">Scanner register</span>
+            <h3>Results from dozens of antivirus companies checked at once</h3>
+            <p>VirusTotal sends what you submitted to 70+ independent security companies at the same time. This table shows only the ones that flagged it as malicious or suspicious. If no engines flagged it, the table is empty — that is a good sign.</p>
+            <div class="guide-tip">One or two flags out of 70+ engines can be a false alarm from a single overreacting vendor. Ten or more independent engines agreeing is a strong warning. The "Result" column shows what type of threat each engine believed it found.</div>
+          </div>
+
+          <div class="guide-card guide-card--chain">
+            <span class="guide-section-label">Redirect chain</span>
+            <h3>Every stop a link made before reaching its final destination</h3>
+            <p>When you click a link, your browser does not always go straight there. A redirect chain shows every website the link bounced through first. Legitimate links usually have zero or one redirect. Phishing links often bounce through several unrelated websites to obscure where they are really taking you.</p>
+            <div class="guide-tip">Three or more hops through different websites is a red flag — even if each site looks harmless on its own. This section only appears when redirects were detected.</div>
+          </div>
+
+          <div class="guide-card guide-card--cert">
+            <span class="guide-section-label">TLS certificate</span>
+            <h3>The details behind the padlock icon in your browser</h3>
+            <p>Every "https://" site has a certificate that verifies its identity. This section shows who issued it and when. A certificate created just a day or two before you received the link is a common warning sign — attackers set up fake websites quickly and use free certificates to look legitimate.</p>
+            <div class="guide-tip">A padlock does not mean a website is trustworthy — it only means the connection is encrypted. Phishing sites use HTTPS and padlocks too. This section only appears when certificate data was available.</div>
+          </div>
+
+          <div class="guide-card guide-card--dns">
+            <span class="guide-section-label">DNS records</span>
+            <h3>The address book entry for the domain</h3>
+            <p>DNS records are the internet's phone book. "A" records show which server hosts the site. "MX" records point to its email servers. "NS" records show who controls the domain name. Together they give a picture of the domain's technical setup. This section only appears for domain lookups.</p>
+            <div class="guide-tip">Most people can skip this. It is mainly useful if you want to verify who is hosting a site, or check whether a domain was set up from scratch very recently.</div>
+          </div>
+
+          <div class="guide-card guide-card--labels">
+            <span class="guide-section-label">Desk labels &amp; vendor classifications</span>
+            <h3>How security companies categorized the item</h3>
+            <p>Labels are short tags describing what kind of site or file this is, collected from VirusTotal's security partners. Vendor Classifications shows the specific category each company assigned independently. When multiple unrelated companies agree on a harmful category, that agreement is a stronger signal than any single source alone.</p>
+            <div class="guide-tip">Labels like "phishing," "malware," "ransomware," or "trojan" are serious warnings. Labels like "games," "news," or "shopping" suggest a normal site.</div>
+          </div>
+
+          <div class="guide-card guide-card--json">
+            <span class="guide-section-label">Raw JSON receipt</span>
+            <h3>The full technical response from VirusTotal, unformatted</h3>
+            <p>This is every field returned by the VirusTotal API — including things not shown anywhere else in the report. It is only useful for security researchers or developers who need to inspect specific technical data that the report does not surface on its own.</p>
+            <div class="guide-tip">You can safely ignore this section for everyday link checking. Everything important is already summarized in the sections above it.</div>
+          </div>
+
+        </div>
       </div>
     </dialog>
 

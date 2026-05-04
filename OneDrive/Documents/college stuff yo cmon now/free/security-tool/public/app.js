@@ -35,9 +35,22 @@ const categoriesGrid = document.querySelector("#categoriesGrid");
 const rawJson = document.querySelector("#rawJson");
 const vtLink = document.querySelector("#vtLink");
 const signalTemplate = document.querySelector("#signalTemplate");
+const reportHelpBtn = document.querySelector("#reportHelpBtn");
+const reportHelpDialog = document.querySelector("#reportHelpDialog");
+const reportHelpCloseBtn = document.querySelector("#reportHelpCloseBtn");
+const themeBtn = document.querySelector("#themeBtn");
+const historyPanel = document.querySelector("#historyPanel");
+const historyClearBtn = document.querySelector("#historyClearBtn");
+const historyList = document.querySelector("#historyList");
+const dnsSection = document.querySelector("#dnsSection");
+const dnsCount = document.querySelector("#dnsCount");
+const dnsBody = document.querySelector("#dnsBody");
 
 // Full detections data stored for the expand button
 let fullDetectionsData = null;
+
+const HISTORY_KEY = "vt-history";
+const MAX_HISTORY = 20;
 
 refreshQuota();
 
@@ -62,6 +75,34 @@ document.addEventListener("click", handleInfoToggle);
 if (new URLSearchParams(window.location.search).has("help")) {
   helpDialog.showModal();
 }
+
+indicatorInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    form.requestSubmit();
+  }
+});
+
+reportHelpBtn.addEventListener("click", () => reportHelpDialog.showModal());
+reportHelpCloseBtn.addEventListener("click", () => reportHelpDialog.close());
+reportHelpDialog.addEventListener("click", (event) => {
+  if (event.target === reportHelpDialog) reportHelpDialog.close();
+});
+
+themeBtn.addEventListener("click", () => {
+  const isLight = document.documentElement.dataset.theme === "light";
+  document.documentElement.dataset.theme = isLight ? "" : "light";
+  themeBtn.textContent = isLight ? "Light mode" : "Dark mode";
+  localStorage.setItem("vt-theme", isLight ? "dark" : "light");
+});
+
+historyClearBtn.addEventListener("click", () => {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+});
+
+initTheme();
+renderHistory();
 
 async function runLookup() {
   clearNotice();
@@ -108,6 +149,14 @@ async function refreshQuota() {
   }
 }
 
+function initTheme() {
+  const saved = localStorage.getItem("vt-theme");
+  if (saved === "light") {
+    document.documentElement.dataset.theme = "light";
+    themeBtn.textContent = "Dark mode";
+  }
+}
+
 function renderReport(payload) {
   clearNotice();
   emptyState.classList.add("hidden");
@@ -134,9 +183,11 @@ function renderReport(payload) {
   renderDetections(payload.report.detections, payload.report.totalDetectionCount, payload.report);
   renderChain(payload.report.redirectChain);
   renderCertificate(payload.report.certificate);
+  renderDnsRecords(payload.report.dnsRecords);
   renderLabels(payload.report.labels);
   renderCategories(payload.report.categories);
   rawJson.textContent = JSON.stringify(payload.report.raw, null, 2);
+  saveToHistory(payload);
 }
 
 function renderFacts(payload) {
@@ -426,6 +477,30 @@ function renderCertificate(cert) {
   }
 }
 
+function renderDnsRecords(records) {
+  dnsBody.replaceChildren();
+
+  if (!records || records.length === 0) {
+    dnsSection.classList.add("hidden");
+    return;
+  }
+
+  dnsSection.classList.remove("hidden");
+  dnsCount.textContent = `${records.length} record${records.length === 1 ? "" : "s"}`;
+
+  for (const record of records) {
+    const row = document.createElement("tr");
+    const typeCell = document.createElement("td");
+    const valueCell = document.createElement("td");
+    const ttlCell = document.createElement("td");
+    typeCell.textContent = record.type;
+    valueCell.textContent = record.priority != null ? `${record.value} (priority ${record.priority})` : record.value;
+    ttlCell.textContent = record.ttl != null ? record.ttl : "—";
+    row.append(typeCell, valueCell, ttlCell);
+    dnsBody.append(row);
+  }
+}
+
 function renderLabels(labels) {
   labelList.replaceChildren();
   const safeLabels = labels && labels.length ? labels : ["no-labels-returned"];
@@ -523,6 +598,90 @@ function colorForScore(score) {
 function formatImpact(value) {
   if (value > 0) return `+${value}`;
   return String(value);
+}
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveToHistory(payload) {
+  const entry = {
+    indicator: payload.indicator,
+    type: payload.type,
+    score: payload.risk.score,
+    verdict: payload.risk.verdict,
+    checkedAt: payload.checkedAt
+  };
+  const history = loadHistory().filter(e => e.indicator !== payload.indicator);
+  history.unshift(entry);
+  history.splice(MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  const history = loadHistory();
+  historyList.replaceChildren();
+
+  if (history.length === 0) {
+    historyPanel.classList.add("hidden");
+    return;
+  }
+
+  historyPanel.classList.remove("hidden");
+
+  for (const entry of history) {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.className = "history-item";
+    btn.type = "button";
+    btn.title = entry.indicator;
+
+    const scoreBadge = document.createElement("span");
+    scoreBadge.className = "history-score" + (entry.score < 25 ? " low" : entry.score < 50 ? " medium" : "");
+    scoreBadge.textContent = entry.score;
+
+    const info = document.createElement("span");
+    info.className = "history-info";
+
+    const indicatorEl = document.createElement("span");
+    indicatorEl.className = "history-indicator";
+    indicatorEl.textContent = entry.indicator;
+
+    const verdictEl = document.createElement("span");
+    verdictEl.className = "history-verdict";
+    verdictEl.textContent = entry.verdict;
+
+    info.append(indicatorEl, verdictEl);
+
+    const timeEl = document.createElement("span");
+    timeEl.className = "history-time";
+    timeEl.textContent = formatRelativeTime(entry.checkedAt);
+
+    btn.append(scoreBadge, info, timeEl);
+    btn.addEventListener("click", () => {
+      indicatorInput.value = entry.indicator;
+      indicatorInput.focus();
+    });
+
+    li.append(btn);
+    historyList.append(li);
+  }
+}
+
+function formatRelativeTime(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 const sampleReport = {
