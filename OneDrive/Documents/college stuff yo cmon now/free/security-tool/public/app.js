@@ -17,12 +17,27 @@ const postureText = document.querySelector("#postureText");
 const caseFacts = document.querySelector("#caseFacts");
 const signalList = document.querySelector("#signalList");
 const detectionsBody = document.querySelector("#detectionsBody");
+const detectionsExpandBtn = document.querySelector("#detectionsExpandBtn");
+const detectionsTotal = document.querySelector("#detectionsTotal");
 const statsText = document.querySelector("#statsText");
 const checkedAt = document.querySelector("#checkedAt");
 const labelList = document.querySelector("#labelList");
+const chainSection = document.querySelector("#chainSection");
+const chainStats = document.querySelector("#chainStats");
+const chainList = document.querySelector("#chainList");
+const certSection = document.querySelector("#certSection");
+const certAge = document.querySelector("#certAge");
+const certAlert = document.querySelector("#certAlert");
+const certFacts = document.querySelector("#certFacts");
+const categoriesSection = document.querySelector("#categoriesSection");
+const categoriesCount = document.querySelector("#categoriesCount");
+const categoriesGrid = document.querySelector("#categoriesGrid");
 const rawJson = document.querySelector("#rawJson");
 const vtLink = document.querySelector("#vtLink");
 const signalTemplate = document.querySelector("#signalTemplate");
+
+// Full detections data stored for the expand button
+let fullDetectionsData = null;
 
 refreshQuota();
 
@@ -116,8 +131,11 @@ function renderReport(payload) {
 
   renderFacts(payload);
   renderSignals(payload.risk.signals);
-  renderDetections(payload.report.detections);
+  renderDetections(payload.report.detections, payload.report.totalDetectionCount, payload.report);
+  renderChain(payload.report.redirectChain);
+  renderCertificate(payload.report.certificate);
   renderLabels(payload.report.labels);
+  renderCategories(payload.report.categories);
   rawJson.textContent = JSON.stringify(payload.report.raw, null, 2);
 }
 
@@ -128,7 +146,7 @@ function renderFacts(payload) {
     ["Report ID", payload.reportId],
     ["VT reputation", payload.report.reputation]
   ];
-  const facts = [...baseFacts, ...(payload.report.meta || []).slice(1, 6).map((item) => [item.label, item.value])];
+  const facts = [...baseFacts, ...(payload.report.meta || []).slice(1, 8).map((item) => [item.label, item.value])];
 
   for (const [label, value] of facts) {
     const wrapper = document.createElement("div");
@@ -183,16 +201,22 @@ function factExplanation(label) {
     "Report ID": "VirusTotal's internal identifier for this exact item. URLs often become encoded IDs, so they may look unusual.",
     "VT reputation": "VirusTotal community reputation. Negative numbers mean more negative community signals; positive numbers mean more positive signals.",
     "Last analysis": "When VirusTotal last scanned or refreshed this item.",
+    "First seen": "When this indicator was first submitted to VirusTotal. A very recent first-seen date on a malicious item means it is a fresh threat.",
+    "Submission count": "How many times this indicator has been submitted to VirusTotal for scanning. Very low counts suggest limited prior exposure.",
     "Final URL": "The final page VirusTotal reached after redirects.",
     "Title": "The page title VirusTotal saw during analysis. Error titles can appear if the site blocked VirusTotal's scanner.",
     "HTTP response": "The web server response code. 200 usually means loaded, 403 means blocked/forbidden, 404 means not found.",
+    "Redirect hops": "How many URLs the server chain passed through before reaching the final page. More hops can indicate traffic laundering or cloaking.",
+    "Cert issuer": "The certificate authority that issued the TLS certificate. Free CAs like Let's Encrypt are commonly used on short-lived phishing pages.",
     "Registrar": "The company where a domain name is registered.",
     "Creation date": "When the domain was first created, if VirusTotal has that data.",
+    "Domain age": "How long ago the domain was registered. Newly registered domains used in phishing campaigns are a strong warning sign.",
     "Last DNS records": "How many recent DNS records VirusTotal has for this domain.",
     "Country": "The country VirusTotal associates with the IP address.",
     "Network": "The IP network range this address belongs to.",
     "ASN": "The autonomous system number, usually identifying the network operator.",
     "Owner": "The organization VirusTotal associates with the IP address.",
+    "Hosted domains": "How many different domains have resolved to this IP address. Very high counts can indicate bulletproof or mass-hosting infrastructure.",
     "Meaningful name": "A filename VirusTotal has seen for this hash.",
     "File type": "The file format or type VirusTotal identified.",
     "Size": "The file size.",
@@ -251,6 +275,13 @@ function signalExplanation(signal) {
     "Detection density": "This compares flagged engines against total engines. A higher percentage means the warning is broader, not just one isolated vendor.",
     "Community reputation": "VirusTotal users and partners can affect reputation. Negative reputation adds concern; positive reputation can reduce it.",
     "Community votes": "Public votes on VirusTotal. More malicious votes than harmless votes raise the score, but they are not a final verdict.",
+    "Young domain": "Newly registered domains are a major phishing indicator — attackers register domains specifically for short campaigns and abandon them quickly. The newer the domain, the higher the concern.",
+    "Multi-hop redirect chain": "The URL passes through multiple intermediate servers before reaching the final destination. This technique is used to hide the real landing page from security scanners and to route traffic through trusted intermediaries.",
+    "Brand-new TLS certificate": "The HTTPS certificate was issued very recently. Phishing sites often provision free certificates from Let's Encrypt moments before launching a campaign — HTTPS alone does not mean a site is safe.",
+    "New TLS certificate": "The certificate was issued recently. On a suspicious domain this can indicate a newly launched site, which is worth investigating further.",
+    "First seen recently": "This indicator was submitted to VirusTotal for the first time very recently. Fresh entries have less accumulated reputation data and may represent emerging threats that haven't been widely flagged yet.",
+    "Very high hosted domain count": "An unusually large number of domains have pointed to this IP. This pattern is common on bulletproof hosting servers used to run phishing farms, spam infrastructure, or malware distribution.",
+    "High hosted domain count": "More domains than normal point to this IP address. This can indicate shared or mass-hosting infrastructure, which is sometimes associated with malicious activity.",
     "Plain HTTP": "The link uses http instead of https, so traffic is not protected by normal browser encryption.",
     "IP host": "The link points directly to a number-based IP address instead of a normal domain name, which can be harder for people to recognize.",
     "Long URL": "Very long links can hide redirects, tracking data, or misleading destination details.",
@@ -266,11 +297,12 @@ function signalExplanation(signal) {
     return "This signal lowers the risk score because it is evidence in the item's favor.";
   }
 
-  return explanations[signal.label] || "This is one reason the local scoring model changed the URL risk score.";
+  return explanations[signal.label] || "This is one reason the local scoring model changed the risk score.";
 }
 
-function renderDetections(detections) {
+function renderDetections(detections, totalDetectionCount, fullReport) {
   detectionsBody.replaceChildren();
+  fullDetectionsData = null;
 
   if (!detections.length) {
     const row = document.createElement("tr");
@@ -279,9 +311,36 @@ function renderDetections(detections) {
     cell.textContent = "No malicious or suspicious engine rows returned.";
     row.append(cell);
     detectionsBody.append(row);
+    detectionsExpandBtn.classList.add("hidden");
     return;
   }
 
+  appendDetectionRows(detections);
+
+  if (totalDetectionCount > 12) {
+    detectionsTotal.textContent = totalDetectionCount;
+    detectionsExpandBtn.classList.remove("hidden");
+    fullDetectionsData = fullReport;
+
+    detectionsExpandBtn.onclick = () => {
+      if (!fullDetectionsData) return;
+      const allResults = Object.entries(fullDetectionsData.raw?.data?.attributes?.last_analysis_results || {})
+        .filter(([, r]) => ["malicious", "suspicious"].includes(r?.category))
+        .map(([engine, r]) => ({
+          engine: r.engine_name || engine,
+          category: r.category || "unknown",
+          result: r.result || "flagged"
+        }));
+      detectionsBody.replaceChildren();
+      appendDetectionRows(allResults);
+      detectionsExpandBtn.classList.add("hidden");
+    };
+  } else {
+    detectionsExpandBtn.classList.add("hidden");
+  }
+}
+
+function appendDetectionRows(detections) {
   for (const detection of detections) {
     const row = document.createElement("tr");
     for (const value of [detection.engine, detection.category, detection.result]) {
@@ -293,6 +352,80 @@ function renderDetections(detections) {
   }
 }
 
+function renderChain(chain) {
+  chainList.replaceChildren();
+
+  if (!chain || chain.length === 0) {
+    chainSection.classList.add("hidden");
+    return;
+  }
+
+  chainSection.classList.remove("hidden");
+  chainStats.textContent = `${chain.length} hop${chain.length === 1 ? "" : "s"}`;
+
+  chain.forEach((url, index) => {
+    const li = document.createElement("li");
+    li.className = "chain-hop";
+    if (index === chain.length - 1) li.classList.add("chain-hop-final");
+
+    const num = document.createElement("span");
+    num.className = "chain-hop-num";
+    num.textContent = index + 1;
+
+    const urlSpan = document.createElement("span");
+    urlSpan.className = "chain-hop-url";
+    urlSpan.textContent = url;
+
+    li.append(num, urlSpan);
+    chainList.append(li);
+  });
+}
+
+function renderCertificate(cert) {
+  certFacts.replaceChildren();
+  certAlert.classList.add("hidden");
+
+  if (!cert) {
+    certSection.classList.add("hidden");
+    return;
+  }
+
+  certSection.classList.remove("hidden");
+
+  // Cert age label for the section line
+  if (cert.validFromRaw) {
+    const ageDays = Math.floor((Date.now() / 1000 - cert.validFromRaw) / 86400);
+    certAge.textContent = ageDays === 0 ? "issued today" : `issued ${ageDays} day${ageDays === 1 ? "" : "s"} ago`;
+
+    if (ageDays < 14) {
+      certAlert.classList.remove("hidden");
+      certAlert.textContent = `Warning: certificate is only ${ageDays === 0 ? "0" : ageDays} day${ageDays === 1 ? "" : "s"} old. Free, short-lived certificates are the standard tool for phishing page HTTPS.`;
+    }
+  } else {
+    certAge.textContent = "";
+  }
+
+  const fields = [
+    ["Issued to", cert.subjectCN],
+    ["Issuer org", cert.issuerOrg],
+    ["Issuer CN", cert.issuerCN],
+    ["Valid from", cert.validFrom],
+    ["Valid to", cert.validTo],
+    ["Serial", cert.serialNumber],
+    ["Thumbprint", cert.thumbprint]
+  ].filter(([, v]) => v);
+
+  for (const [label, value] of fields) {
+    const wrapper = document.createElement("div");
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.textContent = value;
+    wrapper.append(dt, dd);
+    certFacts.append(wrapper);
+  }
+}
+
 function renderLabels(labels) {
   labelList.replaceChildren();
   const safeLabels = labels && labels.length ? labels : ["no-labels-returned"];
@@ -300,6 +433,35 @@ function renderLabels(labels) {
     const chip = document.createElement("span");
     chip.textContent = label;
     labelList.append(chip);
+  }
+}
+
+function renderCategories(categories) {
+  categoriesGrid.replaceChildren();
+
+  if (!categories || Object.keys(categories).length === 0) {
+    categoriesSection.classList.add("hidden");
+    return;
+  }
+
+  categoriesSection.classList.remove("hidden");
+  const entries = Object.entries(categories);
+  categoriesCount.textContent = `${entries.length} vendor${entries.length === 1 ? "" : "s"}`;
+
+  for (const [vendor, category] of entries) {
+    const card = document.createElement("div");
+    card.className = "category-card";
+
+    const vendorEl = document.createElement("div");
+    vendorEl.className = "category-vendor";
+    vendorEl.textContent = vendor;
+
+    const valueEl = document.createElement("div");
+    valueEl.className = "category-value";
+    valueEl.textContent = category;
+
+    card.append(vendorEl, valueEl);
+    categoriesGrid.append(card);
   }
 }
 
@@ -371,11 +533,14 @@ const sampleReport = {
   reportId: "aHR0cDovL2xvZ2luLXNlY3VyZS11cGRhdGUuZXhhbXBsZS5jb20vYWNjb3VudC92ZXJpZnk_c2Vzc2lvbj1kZXNrLWRlbW8mcmVkaXJlY3Q9bWFpbA",
   quota: { minuteRemaining: 3, dayRemaining: 499 },
   risk: {
-    score: 68,
-    verdict: "Elevated risk",
-    posture: "Treat as risky until a human confirms context.",
+    score: 82,
+    verdict: "High risk",
+    posture: "Quarantine first, investigate before opening.",
     signals: [
       { label: "Vendor malicious detections", impact: 36, detail: "3 engines reported malicious activity." },
+      { label: "Brand-new TLS certificate", impact: 12, detail: "Certificate was issued 2 days ago. Phishing pages often use freshly issued free certificates." },
+      { label: "Multi-hop redirect chain", impact: 8, detail: "URL passes through 3 redirects before reaching the final destination." },
+      { label: "First seen recently", impact: 10, detail: "First submitted to VirusTotal 18 hours ago — this is a fresh, unaged entry." },
       { label: "Credential-risk wording", impact: 14, detail: "Contains account or login pressure words: login, secure, update, account." },
       { label: "Plain HTTP", impact: 9, detail: "The URL does not use HTTPS." },
       { label: "Hyphenated host", impact: 4, detail: "Hyphen-heavy names are common in lookalike domains." }
@@ -388,12 +553,17 @@ const sampleReport = {
     reputation: -4,
     votes: { harmless: 1, malicious: 3 },
     labels: ["phishing", "login", "recently-seen", "http"],
+    totalDetectionCount: 4,
     meta: [
       { label: "Type", value: "URL" },
       { label: "VT reputation", value: "-4" },
       { label: "Last analysis", value: "Apr 22, 2026, 10:24 AM" },
+      { label: "First seen", value: "May 3, 2026, 4:10 PM" },
+      { label: "Submission count", value: "3" },
       { label: "Final URL", value: "http://login-secure-update.example.com/account/verify" },
-      { label: "HTTP response", value: "302" }
+      { label: "HTTP response", value: "302" },
+      { label: "Redirect hops", value: "3" },
+      { label: "Cert issuer", value: "Let's Encrypt" }
     ],
     detections: [
       { engine: "AlphaSOC", category: "malicious", result: "phishing" },
@@ -401,6 +571,31 @@ const sampleReport = {
       { engine: "Netcraft", category: "suspicious", result: "suspicious" },
       { engine: "SecureBrain", category: "malicious", result: "malicious" }
     ],
+    redirectChain: [
+      "http://login-secure-update.example.com/account/verify?session=desk-demo&redirect=mail",
+      "http://tracker.redir-example.net/r?url=http%3A%2F%2Flogin-secure-update.example.com",
+      "http://login-secure-update.example.com/account/verify"
+    ],
+    firstSeenAt: Math.floor(Date.now() / 1000) - 3600 * 18,
+    timesSubmitted: 3,
+    certificate: {
+      issuerOrg: "Let's Encrypt",
+      issuerCN: "R11",
+      subjectCN: "login-secure-update.example.com",
+      validFrom: "May 2, 2026, 12:00 AM",
+      validTo: "Jul 31, 2026, 12:00 AM",
+      validFromRaw: Math.floor(Date.now() / 1000) - 86400 * 2,
+      validToRaw: Math.floor(Date.now() / 1000) + 86400 * 88,
+      serialNumber: "03:f1:ab:42:cd:19",
+      thumbprint: "a1b2c3d4e5f67890ab12"
+    },
+    categories: {
+      "Forcepoint ThreatSeeker": "phishing",
+      "Sophos": "malware sites",
+      "Webroot": "phishing and other frauds",
+      "AlphaSOC": "newly registered websites",
+      "BitDefender": "fraud"
+    },
     raw: {
       data: {
         type: "url",

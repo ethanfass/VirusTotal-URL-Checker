@@ -24,7 +24,13 @@ async function triageIndicator(body) {
   enforceLocalQuota();
 
   const vtResponse = await fetchVirusTotal(classification.path, apiKey, classification);
-  const normalized = normalizeVirusTotalReport(vtResponse, classification);
+
+  let resolutionCount = null;
+  if (classification.type === "ip_address") {
+    resolutionCount = await fetchResolutionCount(classification.normalized, apiKey);
+  }
+
+  const normalized = normalizeVirusTotalReport(vtResponse, classification, resolutionCount);
   const risk = scoreIndicator(normalized, classification);
 
   return {
@@ -141,6 +147,20 @@ async function fetchVirusTotal(apiPath, apiKey, classification) {
   return payload;
 }
 
+async function fetchResolutionCount(ip, apiKey) {
+  try {
+    const response = await fetch(
+      `${VT_BASE_URL}/ip_addresses/${encodeURIComponent(ip)}/resolutions?limit=1`,
+      { headers: { accept: "application/json", "x-apikey": apiKey } }
+    );
+    if (!response.ok) return null;
+    const data = await response.json().catch(() => ({}));
+    return typeof data?.meta?.count === "number" ? data.meta.count : null;
+  } catch {
+    return null;
+  }
+}
+
 function notFoundMessage(classification) {
   if (classification.type === "url") {
     const hostname = new URL(classification.normalized).hostname;
@@ -158,20 +178,47 @@ function notFoundMessage(classification) {
   return "VirusTotal does not have a report for that file hash yet.";
 }
 
-function normalizeVirusTotalReport(payload, classification) {
+function normalizeVirusTotalReport(payload, classification, resolutionCount = null) {
   const data = payload?.data || {};
   const attributes = data.attributes || {};
   const stats = attributes.last_analysis_stats || {};
   const votes = attributes.total_votes || {};
-  const detections = Object.entries(attributes.last_analysis_results || {})
+
+  const allDetections = Object.entries(attributes.last_analysis_results || {})
     .filter(([, result]) => ["malicious", "suspicious"].includes(result?.category))
     .map(([engine, result]) => ({
       engine: result.engine_name || engine,
       category: result.category || "unknown",
       result: result.result || "flagged",
       method: result.method || "scanner"
-    }))
-    .slice(0, 12);
+    }));
+
+  const totalDetectionCount = allDetections.length;
+
+  // Domain age in days — only available in domain reports, not URL reports
+  const domainAgeDays = (classification.type === "domain" && attributes.creation_date)
+    ? Math.floor((Date.now() / 1000 - Number(attributes.creation_date)) / 86400)
+    : null;
+
+  // Redirect chain (URLs only)
+  const redirectChain = (classification.type === "url" && Array.isArray(attributes.redirection_chain) && attributes.redirection_chain.length > 1)
+    ? attributes.redirection_chain
+    : null;
+
+  // First seen / submission count
+  const firstSeenAt = attributes.first_submission_date ? Number(attributes.first_submission_date) : null;
+  const timesSubmitted = attributes.times_submitted != null ? Number(attributes.times_submitted) : null;
+
+  // TLS certificate details
+  const certificate = attributes.last_https_certificate
+    ? parseCertificate(attributes.last_https_certificate)
+    : null;
+
+  // Crowdsourced vendor categories
+  const rawCategories = attributes.categories;
+  const categories = (rawCategories && typeof rawCategories === "object" && Object.keys(rawCategories).length > 0)
+    ? rawCategories
+    : null;
 
   return {
     id: data.id || classification.id,
@@ -188,11 +235,48 @@ function normalizeVirusTotalReport(payload, classification) {
       harmless: Number(votes.harmless || 0),
       malicious: Number(votes.malicious || 0)
     },
-    detections,
+    detections: allDetections.slice(0, 12),
+    totalDetectionCount,
     labels: [...new Set([...(attributes.tags || []), ...Object.values(attributes.categories || {})])].slice(0, 12),
-    meta: buildMeta(attributes, classification),
-    raw: payload
+    meta: buildMeta(attributes, classification, resolutionCount, firstSeenAt, timesSubmitted, certificate),
+    raw: payload,
+    // Enrichment fields used for display and scoring
+    domainAgeDays,
+    redirectChain,
+    firstSeenAt,
+    timesSubmitted,
+    certificate,
+    categories,
+    resolutionCount
   };
+}
+
+function parseCertificate(cert) {
+  const issuer = cert.issuer || {};
+  const subject = cert.subject || {};
+  const validity = cert.validity || {};
+  const validFromRaw = parseCertDate(validity.not_before);
+  const validToRaw = parseCertDate(validity.not_after);
+
+  return {
+    issuerOrg: issuer.O || null,
+    issuerCN: issuer.CN || null,
+    subjectCN: subject.CN || null,
+    validFrom: validFromRaw ? formatUnixDate(validFromRaw) : (validity.not_before ? String(validity.not_before) : null),
+    validTo: validToRaw ? formatUnixDate(validToRaw) : (validity.not_after ? String(validity.not_after) : null),
+    validFromRaw,
+    validToRaw,
+    serialNumber: cert.serial_number || null,
+    thumbprint: cert.thumbprint ? cert.thumbprint.slice(0, 24) : null
+  };
+}
+
+function parseCertDate(value) {
+  if (value == null) return null;
+  if (typeof value === "number") return value;
+  // Handle "YYYY-MM-DD HH:MM:SS" format VT uses
+  const d = new Date(String(value).replace(" ", "T") + "Z");
+  return isNaN(d.getTime()) ? null : Math.floor(d.getTime() / 1000);
 }
 
 function vtGuiSegment(type) {
@@ -202,11 +286,13 @@ function vtGuiSegment(type) {
   return "url";
 }
 
-function buildMeta(attributes, classification) {
+function buildMeta(attributes, classification, resolutionCount, firstSeenAt, timesSubmitted, certificate) {
   const meta = [];
   addMeta(meta, "Type", titleCase(classification.type.replace("_", " ")));
   addMeta(meta, "VT reputation", attributes.reputation);
   addMeta(meta, "Last analysis", formatUnixDate(attributes.last_analysis_date));
+  addMeta(meta, "First seen", firstSeenAt ? formatUnixDate(firstSeenAt) : null);
+  addMeta(meta, "Submission count", timesSubmitted);
 
   if (classification.type === "file") {
     addMeta(meta, "Meaningful name", attributes.meaningful_name);
@@ -219,12 +305,25 @@ function buildMeta(attributes, classification) {
     addMeta(meta, "Final URL", attributes.last_final_url || attributes.url);
     addMeta(meta, "Title", attributes.title);
     addMeta(meta, "HTTP response", attributes.last_http_response_code);
+    if (Array.isArray(attributes.redirection_chain) && attributes.redirection_chain.length > 1) {
+      addMeta(meta, "Redirect hops", attributes.redirection_chain.length);
+    }
+    if (certificate?.issuerOrg) {
+      addMeta(meta, "Cert issuer", certificate.issuerOrg);
+    }
   }
 
   if (classification.type === "domain") {
     addMeta(meta, "Registrar", attributes.registrar);
     addMeta(meta, "Creation date", formatUnixDate(attributes.creation_date));
+    if (attributes.creation_date) {
+      const ageDays = Math.floor((Date.now() / 1000 - Number(attributes.creation_date)) / 86400);
+      addMeta(meta, "Domain age", formatDomainAge(ageDays));
+    }
     addMeta(meta, "Last DNS records", Array.isArray(attributes.last_dns_records) ? `${attributes.last_dns_records.length} records` : null);
+    if (certificate?.issuerOrg) {
+      addMeta(meta, "Cert issuer", certificate.issuerOrg);
+    }
   }
 
   if (classification.type === "ip_address") {
@@ -232,6 +331,9 @@ function buildMeta(attributes, classification) {
     addMeta(meta, "Network", attributes.network);
     addMeta(meta, "ASN", attributes.asn ? `AS${attributes.asn}` : null);
     addMeta(meta, "Owner", attributes.as_owner);
+    if (resolutionCount !== null) {
+      addMeta(meta, "Hosted domains", resolutionCount.toLocaleString());
+    }
   }
 
   return meta;
@@ -299,6 +401,95 @@ function scoreIndicator(report, classification) {
       impact: points,
       detail: `${report.votes.malicious} malicious vote(s), ${report.votes.harmless} harmless vote(s).`
     });
+  }
+
+  // Domain age (domain type only — URL reports don't include domain registration date)
+  if (report.domainAgeDays !== null && report.domainAgeDays < 365) {
+    let points, detail;
+    if (report.domainAgeDays < 7) {
+      points = 35;
+      detail = `Domain is only ${report.domainAgeDays} day${report.domainAgeDays === 1 ? "" : "s"} old — brand new.`;
+    } else if (report.domainAgeDays < 30) {
+      points = 25;
+      detail = `Domain is ${report.domainAgeDays} days old — registered very recently.`;
+    } else if (report.domainAgeDays < 90) {
+      points = 15;
+      detail = `Domain is ${report.domainAgeDays} days old — created in the last 3 months.`;
+    } else {
+      points = 5;
+      detail = `Domain is under one year old (${report.domainAgeDays} days).`;
+    }
+    score += points;
+    signals.push({ label: "Young domain", impact: points, detail });
+  }
+
+  // Redirect chain depth
+  if (report.redirectChain && report.redirectChain.length > 1) {
+    const hops = report.redirectChain.length;
+    const points = hops > 5 ? 15 : 8;
+    score += points;
+    signals.push({
+      label: "Multi-hop redirect chain",
+      impact: points,
+      detail: `URL passes through ${hops} redirect${hops === 1 ? "" : "s"} before reaching the final destination.`
+    });
+  }
+
+  // TLS certificate age
+  if (report.certificate?.validFromRaw) {
+    const certAgeDays = Math.floor((Date.now() / 1000 - report.certificate.validFromRaw) / 86400);
+    if (certAgeDays >= 0 && certAgeDays < 14) {
+      const points = 12;
+      score += points;
+      signals.push({
+        label: "Brand-new TLS certificate",
+        impact: points,
+        detail: `Certificate was issued ${certAgeDays === 0 ? "today" : `${certAgeDays} day${certAgeDays === 1 ? "" : "s"} ago`}. Phishing pages often use freshly issued free certificates.`
+      });
+    } else if (certAgeDays >= 14 && certAgeDays < 30) {
+      const points = 5;
+      score += points;
+      signals.push({
+        label: "New TLS certificate",
+        impact: points,
+        detail: `Certificate was issued ${certAgeDays} days ago — recent certs on suspicious domains warrant a closer look.`
+      });
+    }
+  }
+
+  // First seen within 48 hours
+  if (report.firstSeenAt) {
+    const hoursSinceSeen = (Date.now() / 1000 - report.firstSeenAt) / 3600;
+    if (hoursSinceSeen < 48) {
+      const points = 10;
+      score += points;
+      signals.push({
+        label: "First seen recently",
+        impact: points,
+        detail: `First submitted to VirusTotal ${Math.round(hoursSinceSeen)} hour${Math.round(hoursSinceSeen) === 1 ? "" : "s"} ago — this is a fresh, unaged entry.`
+      });
+    }
+  }
+
+  // Hosted domain count on IP (bulletproof hosting indicator)
+  if (report.resolutionCount !== null && classification.type === "ip_address") {
+    if (report.resolutionCount > 500) {
+      const points = 15;
+      score += points;
+      signals.push({
+        label: "Very high hosted domain count",
+        impact: points,
+        detail: `${report.resolutionCount.toLocaleString()} domains have pointed to this IP — typical of bulletproof hosting infrastructure.`
+      });
+    } else if (report.resolutionCount > 100) {
+      const points = 8;
+      score += points;
+      signals.push({
+        label: "High hosted domain count",
+        impact: points,
+        detail: `${report.resolutionCount.toLocaleString()} domains have resolved to this IP — unusually high for a normal server.`
+      });
+    }
   }
 
   const lexicalSignals = scoreLexicalFeatures(classification);
@@ -425,6 +616,18 @@ function httpError(status, message, details = null) {
 function formatUnixDate(value) {
   if (!value) return null;
   return new Date(Number(value) * 1000).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatDomainAge(days) {
+  if (days < 1) return "Less than 1 day";
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} old`;
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+    return `~${months} month${months === 1 ? "" : "s"} old`;
+  }
+  const years = Math.floor(days / 365);
+  const remMonths = Math.floor((days % 365) / 30);
+  return remMonths > 0 ? `${years} yr ${remMonths} mo old` : `${years} year${years === 1 ? "" : "s"} old`;
 }
 
 function formatBytes(value) {

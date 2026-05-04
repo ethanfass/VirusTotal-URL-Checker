@@ -212,6 +212,36 @@
                     <tbody id="detectionsBody"></tbody>
                   </table>
                 </div>
+                <button class="expand-btn hidden" id="detectionsExpandBtn" type="button">Show all <span id="detectionsTotal"></span> flagging engines</button>
+              </section>
+
+              <section class="chain-section hidden" id="chainSection">
+                <div class="section-line">
+                  <div class="title-with-info">
+                    <h3>Redirect Chain</h3>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain redirect chain" data-info="The sequence of URLs visited before the final destination is reached. Multiple hops across different domains can obscure where a link actually leads, which is a common phishing and malware delivery technique.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
+                  <span id="chainStats"></span>
+                </div>
+                <ol id="chainList" class="chain-list"></ol>
+              </section>
+
+              <section class="cert-section hidden" id="certSection">
+                <div class="section-line">
+                  <div class="title-with-info">
+                    <h3>TLS Certificate</h3>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain TLS certificate" data-info="Details of the HTTPS certificate used by this site. Phishing pages often use brand-new free certificates from providers like Let's Encrypt to look legitimate. A certificate issued just days ago on a suspicious domain is a meaningful warning sign.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
+                  <span id="certAge"></span>
+                </div>
+                <div id="certAlert" class="cert-alert hidden"></div>
+                <dl id="certFacts" class="cert-facts"></dl>
               </section>
 
               <section class="tags-section">
@@ -223,6 +253,20 @@
                   </span>
                 </div>
                 <div id="labelList" class="label-list"></div>
+              </section>
+
+              <section class="categories-section hidden" id="categoriesSection">
+                <div class="section-line">
+                  <div class="title-with-info">
+                    <h3>Vendor Classifications</h3>
+                    <span class="info-wrap">
+                      <button class="info-btn" type="button" aria-expanded="false" aria-label="Explain vendor classifications" data-info="Partner security vendors classify sites into categories like phishing, malware distribution, or gambling. Multiple vendors independently agreeing on a harmful category is a strong corroboration signal.">i</button>
+                      <span class="info-popover" hidden></span>
+                    </span>
+                  </div>
+                  <span id="categoriesCount"></span>
+                </div>
+                <div id="categoriesGrid" class="categories-grid"></div>
               </section>
 
               <div class="json-heading">
